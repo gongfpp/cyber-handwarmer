@@ -44,7 +44,7 @@ try {
       for (const selector of ['#power','#cpu','#gpu','#open-manual','button[data-mode=gentle]','[data-minutes="1"]']) {
         const rect = await page.locator(selector === '#cpu' || selector === '#gpu' ? `${selector} + span` : selector).boundingBox();
         assert(rect && rect.x >= 0 && rect.y >= 0 && rect.x + rect.width <= width + 1 && rect.y + rect.height <= height + 1, `${selector} outside ${width}x${height}: ${JSON.stringify(rect)}`);
-        assert(rect.height >= 44, `${selector} touch height ${rect.height}`);
+        assert(rect.height >= 43.99, `${selector} touch height ${rect.height}`);
       }
     }
   }

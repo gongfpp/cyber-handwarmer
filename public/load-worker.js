@@ -1,4 +1,5 @@
 /* Bounded CPU work, locally calibrated against the same arithmetic kernel. */
+let revision = 0, mode = 'gentle';
 let duty = 0, endAt = 0, lastHeartbeat = 0, task = null, active = false;
 let accumulator = .123, batchSize = 200, windowStart = performance.now(), busyMs = 0, iterations = 0, worstOverrun = 0;
 const channel = new MessageChannel();
@@ -48,7 +49,7 @@ function cycle() {
       const duration = performance.now() - cycleStart;
       worstOverrun = Math.max(worstOverrun, duration - 100);
       if (performance.now() - windowStart >= 700) {
-        postMessage({ type: 'stats', busyMs, wallMs: performance.now() - windowStart, iterations, overrunMs: Math.max(0, worstOverrun) });
+        postMessage({ type: 'stats', revision, mode, duty, busyMs, wallMs: performance.now() - windowStart, iterations, overrunMs: Math.max(0, worstOverrun) });
         windowStart = performance.now(); busyMs = 0; iterations = 0; worstOverrun = 0;
       }
       task = setTimeout(cycle, Math.max(0, 100 - duration));
@@ -60,10 +61,14 @@ onmessage = ({ data }) => {
   if (data.type === 'benchmark' && !active) { benchmark(); return; }
   if (data.type === 'heartbeat') { lastHeartbeat = performance.now(); return; }
   if (data.type === 'start' || data.type === 'update') {
+    const nextRevision = Number(data.revision) || 0, changed = nextRevision !== revision;
+    if (nextRevision !== revision) { windowStart = performance.now(); busyMs = 0; iterations = 0; worstOverrun = 0; }
+    revision = nextRevision; mode = data.mode || mode;
     duty = Math.max(0, Math.min(.85, Number(data.duty) || 0));
     batchSize = Math.max(128, Math.min(8192, Number(data.batchSize) || 200));
     endAt = Math.min(Number(data.endAt) || now(), now() + 300000); lastHeartbeat = performance.now();
-    if (!active && data.type === 'start') { queuedSlice = null; active = true; windowStart = performance.now(); task = setTimeout(cycle, data.offset || 0); }
+    postMessage({ type: 'applied', revision, mode, duty });
+    if ((!active && data.type === 'start') || (active && changed)) { clearTimeout(task); queuedSlice = null; active = true; windowStart = performance.now(); task = setTimeout(cycle, data.offset || 0); }
   }
 };
 postMessage({ type: 'ready' });

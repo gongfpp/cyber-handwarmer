@@ -10,11 +10,13 @@ const reasons = {
 export class GPUController {
   worker = null; engine = null; active = false; generation = 0; heartbeat = null;
   endAt = 0; device = null; lastBeat = 0; pendingCancel = null;
-  onStatus = () => {}; onStats = () => {};
+  revision = 0; configuration = null; startedAt = 0; stats = null; statsAt = 0; applied = null;
+  onStatus = () => {}; onStats = () => {}; onTelemetry = () => {};
   async start(mode, endAt) {
     this.stop(); this.endAt = endAt;
     const generation = this.generation, hints = deviceCapabilities();
-    const configuration = { type: 'start', mode, endAt, memoryGiB: hints.memoryGiB, mobile: hints.mobile };
+    this.startedAt = monotonicNow();
+    const configuration = this.configuration = { type: 'start', mode, endAt, revision: ++this.revision, memoryGiB: hints.memoryGiB, mobile: hints.mobile };
     if (typeof Worker === 'function' && typeof OffscreenCanvas === 'function') {
       const result = await this.launch(configuration, generation, true);
       if (result.ok || result.cancelled || generation !== this.generation) return result;
@@ -54,7 +56,8 @@ export class GPUController {
           }, 250);
           finish({ ok: true }); this.onStatus('running');
         }
-        if (data.type === 'stats') this.onStats(data);
+        if (data.type === 'applied') { this.applied = data; this.onTelemetry(); }
+        if (data.type === 'stats') { this.stats = data; this.statsAt = monotonicNow(); this.onStats(data); this.onTelemetry(); }
         if (data.type === 'unavailable' || data.type === 'stopped') unavailable(data.reason);
       };
       try {
@@ -78,9 +81,20 @@ export class GPUController {
     }).then(result => { if (!result.ok && generation === this.generation) this.disposeBackend(); return result; });
   }
   send(data) { this.worker?.postMessage(data); this.engine?.receive(data); }
-  update(mode, endAt) { this.endAt = endAt; this.send({ type: 'update', mode, endAt }); }
+  update(mode, endAt) {
+    this.endAt = endAt; this.startedAt = monotonicNow();
+    this.configuration = { ...this.configuration, mode, endAt, revision: ++this.revision };
+    this.send({ type: 'update', mode, endAt, revision: this.revision }); this.onTelemetry();
+  }
+  snapshot() {
+    if (!this.configuration) return { status: 'stopped' };
+    const recent = this.stats?.revision === this.configuration.revision && monotonicNow() - this.statsAt < 2200;
+    const status = this.active && recent && this.applied?.revision === this.configuration.revision ? 'running'
+      : monotonicNow() - this.startedAt < 2200 ? (this.stats ? 'applying' : 'starting') : 'waiting';
+    return { status, ...(recent ? this.stats : {}), backend: this.device?.backend, revision: this.configuration.revision };
+  }
   disposeBackend() {
-    clearInterval(this.heartbeat); this.heartbeat = null; this.active = false;
+    clearInterval(this.heartbeat); this.heartbeat = null; this.active = false; this.stats = null; this.statsAt = 0; this.applied = null;
     const engine = this.engine; this.engine = null; engine?.stop();
     const worker = this.worker; this.worker = null;
     if (worker) {
@@ -91,6 +105,6 @@ export class GPUController {
     }
   }
   stop() {
-    this.generation++; this.pendingCancel?.(); this.pendingCancel = null; this.disposeBackend();
+    this.generation++; this.configuration = null; this.pendingCancel?.(); this.pendingCancel = null; this.disposeBackend();
   }
 }

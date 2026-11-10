@@ -1,15 +1,17 @@
 import { LoadController, MODES, monotonicNow } from './load-controller.js';
 import { deviceCapabilities } from './adaptive-policy.js';
 import { GPUController } from './gpu-controller.js';
+import { FireSound } from './fire-sound.js';
 const $ = id => document.getElementById(id);
 const cpu = new LoadController();
 const gpu = new GPUController();
+const sound = new FireSound();
 const available = { cpu: deviceCapabilities().cpuAvailable, gpu: true };
 const sourceRequests = { cpu: 0, gpu: 0 };
 const state = { phase: 'idle', mode: 'gentle', minutes: 1, cpu: available.cpu, gpu: false, endAt: 0, remaining: 60, token: 0, gpuError: '', cpuError: available.cpu ? '' : '浏览器未提供计算线程。', skin: 'nordic' };
 const running = () => state.phase === 'running';
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-let ticker, toastTimer, lastSecond;
+let ticker, toastTimer, lastSecond, lastTelemetry = 0;
 function feedback(message) {
   clearTimeout(toastTimer);
   $('feedback-text').textContent = message;
@@ -29,6 +31,31 @@ function drawTime(seconds) {
     }
   });
 }
+const statusNames = { stopped: '已停止', starting: '启动中', applying: '应用中', running: '运行中', waiting: '等待数据', disabled: '已关闭', unavailable: '不可用' };
+function setText(id, value) { const node = $(id); if (node.textContent !== value) node.textContent = value; }
+function renderTelemetry() {
+  const snapshots = { cpu: cpu.snapshot(), gpu: gpu.snapshot() };
+  for (const source of ['cpu', 'gpu']) {
+    const snapshot = snapshots[source];
+    const status = !available[source] ? 'unavailable' : !state[source] ? 'disabled' : state.phase === 'idle' ? 'stopped'
+      : snapshot.status === 'stopped' ? 'starting' : snapshot.status;
+    const row = $(`${source}-readout`);
+    row.dataset.status = status; row.dataset.mode = snapshot.mode || ''; row.dataset.revision = String(snapshot.revision || 0);
+    setText(`${source}-status`, statusNames[status]);
+    const live = status === 'running' || status === 'applying';
+    $(source).closest('.source').classList.toggle('is-active', live && (source === 'cpu' ? snapshot.count > 0 : !!snapshot.batchesPerSecond));
+    let value = '—', detail = '';
+    if (source === 'cpu' && live && snapshot.count) {
+      value = `${snapshot.count} 线程`;
+      detail = `${new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 1 }).format(snapshot.iterationsPerSecond)}次/秒`;
+    }
+    if (source === 'gpu' && live && snapshot.batchesPerSecond > 0) {
+      value = `${snapshot.batchesPerSecond.toFixed(1)} 批/秒`;
+      detail = snapshot.gpuMs > 0 ? `GPU ${snapshot.gpuMs.toFixed(2)} ms/批` : snapshot.backend === 'page-webgl2' ? '兼容计算' : '后台计算';
+    }
+    setText(`${source}-value`, value); setText(`${source}-metric`, detail);
+  }
+}
 function render() {
   drawTime(Math.max(0, Math.ceil(state.remaining)));
   $('heater').dataset.on = String(running()); $('heater').dataset.mode = state.mode;
@@ -42,8 +69,7 @@ function render() {
     $(source).disabled = !available[source];
     $(source).closest('.source').classList.toggle('is-unavailable', !available[source]);
   }
-  $('cpu').closest('.source').classList.toggle('is-active', running() && state.cpu && !!cpu.configuration);
-  $('gpu').closest('.source').classList.toggle('is-active', gpu.active);
+  renderTelemetry();
   $('gpu').closest('.source').classList.toggle('has-error', !!state.gpuError);
   $('gpu').setAttribute('aria-label', state.gpuError ? `GPU：${state.gpuError}` : 'GPU');
   $('cpu-detail').textContent = state.cpuError || cpu.description(state.mode);
@@ -52,15 +78,16 @@ function render() {
   document.querySelectorAll('button[data-minutes]').forEach(button => button.setAttribute('aria-pressed', String(Number(button.dataset.minutes) === state.minutes)));
   document.querySelectorAll('button[data-skin]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.skin === state.skin)));
 }
-function stop(message = '', completed = false) {
+function stop(message = '', completed = false, immediate = false) {
   state.token++; sourceRequests.cpu++; sourceRequests.gpu++; state.phase = 'idle';
-  cpu.stop(); gpu.stop(); clearInterval(ticker); ticker = null;
+  cpu.stop(); gpu.stop(); sound.stop(immediate || document.hidden); clearInterval(ticker); ticker = null;
   state.remaining = completed ? 0 : state.minutes * 60;
   render(); feedback(message);
 }
 function tick() {
   if (!running()) return;
-  if (document.hidden) { stop('已停止'); return; }
+  if (document.hidden) { stop('', false, true); return; }
+  if (monotonicNow() - lastTelemetry > 400) { lastTelemetry = monotonicNow(); renderTelemetry(); }
   state.remaining = Math.max(0, (state.endAt - monotonicNow()) / 1000);
   if (state.remaining <= 0) { stop('时间到', true); return; }
   const second = Math.ceil(state.remaining);
@@ -81,6 +108,7 @@ async function fallbackCPU(token) {
 }
 async function start() {
   if (document.hidden) return;
+  sound.arm();
   state.phase = 'starting'; state.remaining = state.minutes * 60; state.endAt = monotonicNow() + state.remaining * 1000;
   const token = ++state.token; render(); feedback('');
   const [cpuStarted, gpuResult] = await Promise.all([
@@ -95,9 +123,10 @@ async function start() {
     await fallbackCPU(token);
   }
   if (state.token !== token) return;
-  state.phase = 'running'; lastSecond = null; tick(); ticker = setInterval(tick, 100); render();
+  state.phase = 'running'; sound.start(state.mode, state.skin); lastSecond = null; tick(); ticker = setInterval(tick, 100); render();
 }
-cpu.onConfig = () => { $('cpu-detail').textContent = state.cpuError || cpu.description(state.mode); };
+cpu.onConfig = () => { $('cpu-detail').textContent = state.cpuError || cpu.description(state.mode); renderTelemetry(); };
+cpu.onTelemetry = renderTelemetry; gpu.onTelemetry = renderTelemetry;
 cpu.onFailure = () => {
   if (state.phase === 'idle') return;
   if (document.hidden || state.endAt <= monotonicNow()) { stop('', state.endAt <= monotonicNow()); return; }
@@ -117,7 +146,7 @@ $('modes').addEventListener('click', event => {
   const button = event.target.closest('button[data-mode]');
   if (!button || button.dataset.mode === state.mode) return;
   if (state.phase === 'starting') stop();
-  state.mode = button.dataset.mode;
+  state.mode = button.dataset.mode; sound.update(state.mode, state.skin);
   if (running()) { if (state.cpu) cpu.update(state.mode, state.endAt); if (gpu.active) gpu.update(state.mode, state.endAt); }
   render();
 });
@@ -152,12 +181,12 @@ for (const source of ['cpu', 'gpu']) $(source).addEventListener('change', async 
 });
 document.querySelector('.skins').addEventListener('click', event => {
   const button = event.target.closest('button[data-skin]');
-  if (button) { state.skin = button.dataset.skin; document.body.dataset.skin = state.skin; render(); }
+  if (button) { state.skin = button.dataset.skin; document.body.dataset.skin = state.skin; sound.update(state.mode, state.skin); render(); }
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden && state.phase !== 'idle') stop(); });
-window.addEventListener('pagehide', () => stop());
-document.addEventListener('freeze', () => stop());
-window.addEventListener('pageshow', event => { if (event.persisted) stop(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { if (state.phase !== 'idle') stop('', false, true); else sound.stop(true); } });
+window.addEventListener('pagehide', () => stop('', false, true));
+document.addEventListener('freeze', () => stop('', false, true));
+window.addEventListener('pageshow', event => { if (event.persisted) stop('', false, true); });
 const manual = $('manual');
 $('open-manual').addEventListener('click', () => manual.showModal());
 $('close-manual').addEventListener('click', () => manual.close());

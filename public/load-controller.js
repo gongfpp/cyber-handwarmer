@@ -6,7 +6,8 @@ export class LoadController {
   workers = []; records = new Map(); generation = 0; configuration = null;
   heartbeat = null; governor = null; calibration = null; device = deviceCapabilities();
   adaptive = null; profile = null; peakLag = 0; lastBeat = 0;
-  onFailure = () => {}; onConfig = () => {};
+  revision = 0; startedAt = 0;
+  onFailure = () => {}; onConfig = () => {}; onTelemetry = () => {};
   fail(generation) {
     if (generation !== this.generation) return;
     this.stop(); this.onFailure('计算已停止');
@@ -25,7 +26,7 @@ export class LoadController {
     const generation = this.generation;
     const worker = new Worker(new URL('./load-worker.js', import.meta.url));
     this.workers.push(worker);
-    const record = { ready: false, stats: null, statsAt: 0, benchmark: null, cancel: null, startOnReady };
+    const record = { ready: false, applied: null, stats: null, statsAt: 0, benchmark: null, cancel: null, startOnReady };
     this.records.set(worker, record);
     return new Promise(resolve => {
       const finish = result => { clearTimeout(timeout); record.cancel = null; resolve(result); };
@@ -35,7 +36,8 @@ export class LoadController {
         if (generation !== this.generation || !this.records.has(worker)) return;
         if (data.type === 'ready') { record.ready = true; if (record.startOnReady) this.send(worker, 'start'); finish(true); }
         if (data.type === 'benchmark') record.benchmark?.(data);
-        if (data.type === 'stats') { record.stats = data; record.statsAt = monotonicNow(); }
+        if (data.type === 'applied') { record.applied = data; this.onTelemetry(); }
+        if (data.type === 'stats') { record.stats = data; record.statsAt = monotonicNow(); this.onTelemetry(); }
         if (data.type === 'stopped') this.loseWorker(worker, generation);
       });
       worker.addEventListener('error', event => { event.preventDefault(); this.loseWorker(worker, generation); });
@@ -58,7 +60,8 @@ export class LoadController {
     this.stop(); const generation = this.generation;
     this.device = deviceCapabilities(); this.profile = cpuProfile(mode, this.device);
     this.adaptive = { count: this.profile.initialCount, duty: this.profile.initialDuty, healthy: 0, strained: 0 };
-    this.configuration = { mode, endAt, duty: this.adaptive.duty };
+    this.configuration = { mode, endAt, duty: this.adaptive.duty, revision: ++this.revision };
+    this.startedAt = monotonicNow();
     try {
       if (!this.device.cpuAvailable) throw new Error('UNAVAILABLE');
       const ready = await this.addWorker(false);
@@ -107,10 +110,22 @@ export class LoadController {
     const changed = mode !== this.configuration.mode;
     this.profile = cpuProfile(mode, this.device);
     if (changed) this.adaptive = { count: this.profile.initialCount, duty: this.profile.initialDuty, healthy: 0, strained: 0 };
-    this.configuration = { mode, endAt, duty: this.adaptive.duty };
+    this.configuration = { mode, endAt, duty: this.adaptive.duty, revision: ++this.revision };
+    this.startedAt = monotonicNow();
     this.resize(this.adaptive.count);
     for (const [worker, record] of this.records) if (record.ready) this.send(worker);
     this.onConfig();
+  }
+  snapshot() {
+    if (!this.configuration) return { status: 'stopped', count: 0, iterationsPerSecond: null };
+    const time = monotonicNow(), revision = this.configuration.revision;
+    const records = [...this.records.values()];
+    const recent = records.filter(r => r.stats?.revision === revision && r.stats.iterations > 0 && time - r.statsAt < 2200);
+    const applied = records.every(r => r.applied?.revision === revision);
+    const status = recent.length === records.length && records.length && applied ? 'running'
+      : recent.length ? 'applying' : time - this.startedAt < 2200 ? 'starting' : 'waiting';
+    return { status, count: recent.length, mode: this.configuration.mode, revision,
+      iterationsPerSecond: recent.length ? recent.reduce((sum, r) => sum + r.stats.iterations * 1000 / Math.max(1, r.stats.wallMs), 0) : null };
   }
   description(mode) {
     const target = cpuProfile(mode, this.device);

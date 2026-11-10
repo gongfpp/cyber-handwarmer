@@ -46,8 +46,8 @@ try {
   assert.equal(await page.evaluate(() => window.__pool.length), 0);
   await page.locator('button[data-mode=toasty]').click(); await page.locator('[data-minutes="3"]').click();
   assert.equal(await page.evaluate(() => window.__pool.length), 0);
-  assert.equal(await page.locator('#load-cap').innerText(), '上限 85%');
-  checks.push('首次打开、预选不创建 Worker，页面显示上限 85%');
+  assert.equal(await page.locator('#load-cap').innerText(), '目标工作比例 85%');
+  checks.push('首次打开、预选不创建 Worker，页面显示目标工作比例 85%');
   await page.locator('#power').click(); await lit();
   await page.waitForFunction(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated && w.sent.some(m => m.duty >= .849)).length === 8);
   let workers = await liveCPU(); assert.equal(workers.length, 8);

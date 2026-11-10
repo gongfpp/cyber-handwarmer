@@ -10,6 +10,8 @@ export function createGPUEngine({ createCanvas, emit, finish = () => {}, mobile 
   };
   let gl, canvas, program, textures = [], framebuffers = [], sync = null;
   let disposed = false, buffer = null;
+  let revision = 0, mode = 'gentle', batchRevision = 0, batchMode = 'gentle', batchSide = 0, batchSteps = 0;
+  let statsStart = performance.now(), completed = 0;
   let active = false, task = null, endAt = 0, lastHeartbeat = 0;
   let profile = profiles.gentle, side = 512, frame = 0, lastStats = 0, batchStart = 0;
   let stepLocation, timeLocation, lastBatchMs = 0;
@@ -20,7 +22,7 @@ export function createGPUEngine({ createCanvas, emit, finish = () => {}, mobile 
     queries = queries.filter(item => {
       if (!gl.getQueryParameter(item.query, gl.QUERY_RESULT_AVAILABLE)) return true;
       const value = Number(gl.getQueryParameter(item.query, gl.QUERY_RESULT)) / 1e6;
-      if (!disjoint && Number.isFinite(value) && value > 0) timing = { ms: value, frame: item.frame, side: item.side, steps: item.steps };
+      if (!disjoint && Number.isFinite(value) && value > 0) timing = { ms: value, frame: item.frame, side: item.side, steps: item.steps, revision: item.revision };
       gl.deleteQuery(item.query); return false;
     });
     if (disjoint) timing = null;
@@ -120,7 +122,7 @@ export function createGPUEngine({ createCanvas, emit, finish = () => {}, mobile 
     if (!canRun()) return;
     const maxSide = Math.min(profile.maxSide, memoryLimit);
     if (side > maxSide) allocate(maxSide);
-    batchStart = performance.now();
+    batchStart = performance.now(); batchRevision = revision; batchMode = mode; batchSide = side; batchSteps = runtimeSteps;
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, textures[frame % 2]);
     gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffers[(frame + 1) % 2]);
@@ -128,7 +130,7 @@ export function createGPUEngine({ createCanvas, emit, finish = () => {}, mobile 
     const query = timerExt ? gl.createQuery() : null;
     if (query) gl.beginQuery(timerExt.TIME_ELAPSED_EXT, query);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
-    if (query) { gl.endQuery(timerExt.TIME_ELAPSED_EXT); queries.push({ query, frame, side, steps: runtimeSteps }); }
+    if (query) { gl.endQuery(timerExt.TIME_ELAPSED_EXT); queries.push({ query, frame, side, steps: runtimeSteps, revision: batchRevision }); }
 
     sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); gl.flush();
     if (!sync) { stop('gpu-sync', 'unavailable'); return; }
@@ -140,8 +142,8 @@ export function createGPUEngine({ createCanvas, emit, finish = () => {}, mobile 
     if (result === gl.WAIT_FAILED || performance.now() - batchStart > 2000) { stop('gpu-timeout', 'unavailable'); return; }
     if (result === gl.TIMEOUT_EXPIRED) { schedule(poll, 4); return; }
     gl.deleteSync(sync); sync = null;
-    const elapsed = Math.max(1, performance.now() - batchStart); lastBatchMs = elapsed; frame++; collectTiming();
-    const gpuMs = timing && frame - timing.frame < 12 ? timing.ms : null;
+    const elapsed = Math.max(1, performance.now() - batchStart); lastBatchMs = elapsed; frame++; if (batchRevision === revision) completed++; collectTiming();
+    const gpuMs = timing && timing.revision === batchRevision && frame - timing.frame < 12 ? timing.ms : null;
     const workMs = gpuMs || elapsed;
     // Adapt resolution only after completed work. No texture reallocation while a batch is pending.
     if (frame % 6 === 0 || (mobile && frame <= 3)) {
@@ -154,8 +156,9 @@ export function createGPUEngine({ createCanvas, emit, finish = () => {}, mobile 
       else if (workMs > targetMs * 2) runtimeSteps = Math.max(24, Math.round(runtimeSteps * .75));
       else if (workMs < targetMs * .7 && runtimeSteps < profile.steps) runtimeSteps = Math.min(profile.steps, Math.round(runtimeSteps * 1.25));
     }
-    if (performance.now() - lastStats > 700) {
-      lastStats = performance.now(); emit({ type: 'stats', frames: frame, side, steps: runtimeSteps, batchMs: Math.round(lastBatchMs), gpuMs: gpuMs ? Math.round(gpuMs * 100) / 100 : null, measurement: gpuMs ? 'gpu-timer' : 'fence-wall', backend: mainThread ? 'page-webgl2' : 'worker-webgl2', renderer: rendererName, maxSide: Math.min(profile.maxSide, memoryLimit) });
+    if (performance.now() - lastStats > 700 && batchRevision === revision) {
+      lastStats = performance.now(); emit({ type: 'stats', revision: batchRevision, mode: batchMode, frames: frame, side: batchSide, steps: batchSteps, batchesPerSecond: completed * 1000 / Math.max(1, performance.now() - statsStart), batchMs: Math.round(lastBatchMs), gpuMs: gpuMs ? Math.round(gpuMs * 100) / 100 : null, measurement: gpuMs ? 'gpu-timer' : 'fence-wall', backend: mainThread ? 'page-webgl2' : 'worker-webgl2', renderer: rendererName, maxSide: Math.min(profile.maxSide, memoryLimit) });
+      completed = 0; statsStart = performance.now();
     }
     const duty = mainLagMs > 80 ? Math.min(.65, profile.duty) : profile.duty;
     const pause = Math.max(0, workMs / duty - elapsed);
@@ -168,9 +171,13 @@ export function createGPUEngine({ createCanvas, emit, finish = () => {}, mobile 
     if (data.type === 'stop') { stop('user'); return; }
     if (data.type === 'heartbeat') { lastHeartbeat = performance.now(); mainLagMs = Number(data.mainLagMs) || 0; return; }
     if (data.type === 'start' || data.type === 'update') {
+      const nextRevision = Number(data.revision) || 0;
+      if (revision !== nextRevision) { completed = 0; statsStart = performance.now(); }
+      revision = nextRevision; mode = data.mode || mode;
       const nextProfile = profiles[data.mode] || profiles.gentle;
       if (profile !== nextProfile || !active) runtimeSteps = mobile ? Math.min(96, nextProfile.steps) : nextProfile.steps;
       profile = nextProfile;
+      emit({ type: 'applied', revision, mode });
       endAt = Math.min(Number(data.endAt) || now(), now() + 300000); lastHeartbeat = performance.now();
       if (!active && data.type === 'start') {
         if (data.memoryGiB && data.memoryGiB <= 2) memoryLimit = Math.min(memoryLimit, 768);
