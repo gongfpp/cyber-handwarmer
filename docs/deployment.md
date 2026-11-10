@@ -43,7 +43,7 @@ CLI 使用本机登录状态，不要把 Token 放进代码、提交记录或公
 
 ## 累计统计
 
-`GET /api/warmth` 返回 `{ visitors, sessions, litMs, scope }`。主动开启后 `POST` 随机 `visitorId`、`runId` 与本次累计 `litMs`，每 30 秒和停止时报告；隐藏或离开时尝试发送最后一份。异常关闭或网络失败可能丢失最后一个间隔的数据，不回填猜测值。展示时间以 0.1 分钟为单位向下取整。
+`GET /api/warmth` 返回 `{ visitors, sessions, litMs, scope }`。主动开启后 `POST` 随机 `visitorId`、`runId` 与本次累计 `litMs`，每 30 秒和停止时报告；隐藏或离开时尝试发送最后一份。异常关闭或网络失败可能丢失最后一个间隔的数据，不回填猜测值。展示时间换算为整秒并向下取整。
 
 Blob 的 `little-warmth-live-v1` 命名空间保存正式域名和项目默认域名的数据；其他预览域名使用 `little-warmth-preview-v1`。部署不清空存储。没有历史埋点，不导入或补造旧数字。正式站自动化验收不写入统计。
 

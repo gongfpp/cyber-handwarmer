@@ -30,7 +30,7 @@ if(process.env.TEST_URL){
     page.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/api/warmth'))payloads.push(r.postDataJSON());});
     await page.goto(`${base}/?stats_test=1`);
     await page.locator('#community').waitFor({state:'visible'});
-    assert.match(await page.locator('#community').innerText(),/已累计温暖 .* 位访客，累计照亮 .* 分钟的黑暗/);
+    assert.match(await page.locator('#community').innerText(),/已累计温暖 .* 位访客，累计照亮 .* 秒黑暗/);
     assert.equal(payloads.length,0);assert.equal(await page.evaluate(()=>localStorage.getItem('little-warmth-visitor')),null);
     const read=page=>page.evaluate(async()=>{const r=await fetch('/api/warmth',{cache:'no-store'});if(!r.ok)throw Error(`stats ${r.status}`);return r.json();});
     const before=await read(page);assert.equal(before.scope,'preview');

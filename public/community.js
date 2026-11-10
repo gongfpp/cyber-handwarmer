@@ -9,7 +9,7 @@ const identifier = () => {
   } catch { return null; }
 };
 const publicHosts = new Set(['warm.gongfpp.icu','cyber-handwarmer-a0z0axp0.edgeone.dev']);
-const format = new Intl.NumberFormat('zh-CN',{maximumFractionDigits:1});
+const format = new Intl.NumberFormat('zh-CN',{maximumFractionDigits:0});
 export class Community {
   run = null; timer = null; scope = null; totals = null;
   constructor(node) { this.node=node; this.ready=this.load(); }
@@ -23,8 +23,8 @@ export class Community {
     this.scope=data.scope;
     if(this.totals&&(data.visitors<this.totals.visitors||data.litMs<this.totals.litMs))return;
     this.totals=data;
-    const minutes=Math.floor(data.litMs/6000)/10;
-    this.node.textContent=`已累计温暖 ${format.format(data.visitors)} 位访客，累计照亮 ${format.format(minutes)} 分钟的黑暗`;
+    const seconds=Math.floor(data.litMs/1000);
+    this.node.textContent=`已累计温暖 ${format.format(data.visitors)} 位访客，累计照亮 ${format.format(seconds)} 秒黑暗`;
     this.node.hidden=false;
   }
   start() {
