@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f3eee4"><meta name="description" content="一台放在浏览器里的复古暖手炉。三档可调、限时运行，也可以只看炉火，享受一点冬日暖意。">
-  <title>小暖 · 赛博暖手宝</title><link rel="icon" href="./icon.svg" type="image/svg+xml"><link rel="stylesheet" href="./style.css"><script type="module" src="./app.js"></script>
+  <title>小暖 · 赛博暖手宝</title><link rel="icon" href="./icon.svg" type="image/svg+xml"><link rel="stylesheet" href="./style.css"><link rel="stylesheet" href="./motion.css"><script type="module" src="./app.js"></script>
 </head>
 <body>
   <header class="site-header">
@@ -26,7 +26,7 @@
           <div class="carry-handle" aria-hidden="true"></div>
           <div class="heater-shell">
             <div class="device-header"><div class="device-wordmark">小暖 <span>WARM—01</span></div><div class="device-status"><span id="status-led"></span><span id="device-state">待机中</span></div></div>
-            <div class="grill" aria-hidden="true"><div class="reflector"></div><div class="coils"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="grill-mesh"></div><div class="grill-rail top"></div><div class="grill-rail bottom"></div><div class="grill-badge">LITTLE WARMTH</div></div>
+            <div class="grill" aria-hidden="true"><div class="reflector"></div><div class="coils"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="heat-haze"><i></i><i></i><i></i></div><div class="grill-mesh"></div><div class="grill-rail top"></div><div class="grill-rail bottom"></div><div class="grill-badge">LITTLE WARMTH</div></div>
             <div class="display" role="timer" aria-label="剩余时间"><div class="display-left"><span class="display-label" id="display-label">READY WHEN YOU ARE</span><div class="digits" id="countdown">01<span>:</span>00</div></div><div class="display-right"><span class="heat-waves" aria-hidden="true">≋</span><strong id="display-mode">轻柔</strong><span id="display-kind">计算待机</span></div><div class="progress-track"><i id="progress"></i></div></div>
             <fieldset class="control-field modes"><legend>暖意档位 <span>WARMTH</span></legend><div class="segmented" id="modes"><button type="button" data-mode="gentle" aria-pressed="true"><span aria-hidden="true">Ⅰ</span>轻柔</button><button type="button" data-mode="cozy" aria-pressed="false"><span aria-hidden="true">Ⅱ</span>温暖</button><button type="button" data-mode="toasty" aria-pressed="false"><span aria-hidden="true">Ⅲ</span>热烈</button></div></fieldset>
             <div class="bottom-controls"><fieldset class="control-field timer"><legend>定时休息 <span>MINUTES</span></legend><div class="time-buttons" id="durations"><button type="button" data-minutes="1" aria-pressed="true">1<span>分</span></button><button type="button" data-minutes="3" aria-pressed="false">3<span>分</span></button><button type="button" data-minutes="5" aria-pressed="false">5<span>分</span></button></div></fieldset><button class="power-button" id="power" aria-label="开启暖手" aria-pressed="false"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M6.4 5.9a8 8 0 1 0 11.2 0" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" fill="none"/></svg><span id="power-label">开启暖手</span></button></div>
@@ -38,7 +38,7 @@
     </section>
     <section class="utility-bar" aria-label="运行设置与状态">
       <label class="demo-toggle"><input type="checkbox" id="demo"><span class="switch" aria-hidden="true"></span><span><strong>仅看炉火</strong><span class="setting-subtitle">不产生计算负载</span></span></label>
-      <div class="load-info"><span class="small-sun" aria-hidden="true">✳</span><div><strong id="load-title">轻柔 · 轻量计算</strong><span id="load-description">启动后，最多 2 个计算线程 / 12% 工作占空比</span></div></div>
+      <div class="load-info"><span class="small-sun" aria-hidden="true">✳</span><div><strong id="load-title">轻柔 · 轻量计算</strong><span id="load-description">轻量运行，到点自动休息</span></div></div>
       <button id="stop" class="stop-button" disabled><span aria-hidden="true">■</span> 停止运行</button>
     </section>
     <div class="feedback" role="status" aria-live="polite" aria-atomic="true"><span class="feedback-dot" aria-hidden="true"></span><span id="feedback-text">还没开机。选好档位，按下电源就好。</span></div>

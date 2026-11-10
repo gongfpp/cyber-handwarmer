@@ -1,6 +1,6 @@
 {
   "name": "a-little-warmth",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "description": "小暖 · 赛博暖手宝，零依赖纯静态网站",
@@ -9,5 +9,11 @@
     "build": "node scripts/build.mjs",
     "preview": "node scripts/serve.mjs dist",
     "verify": "node scripts/verify.mjs"
-  }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gongfpp/cyber-handwarmer.git"
+  },
+  "homepage": "https://warm.gongfpp.icu/"
 }

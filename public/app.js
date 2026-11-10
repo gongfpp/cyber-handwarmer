@@ -1,14 +1,47 @@
-import { LoadController, MODES, workerCount, monotonicNow } from './load-controller.js';
+import { LoadController, MODES, monotonicNow } from './load-controller.js';
 const $ = id => document.getElementById(id);
 const load = new LoadController();
 const state = { phase: 'idle', mode: 'gentle', minutes: 1, demo: false, endAt: 0, remaining: 60, token: 0 };
 let ticker = null, lastAnnounced = null;
 const running = () => state.phase === 'running';
-function feedback(message) { $('feedback-text').textContent = message; }
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+function replayClass(element, name) {
+  element.classList.remove(name);
+  if (reducedMotion.matches || document.hidden) return;
+  // Restart only this short feedback animation, never the computation.
+  void element.offsetWidth;
+  element.classList.add(name);
+}
+function feedback(message) {
+  $('feedback-text').textContent = message;
+  replayClass($('feedback-text').parentElement, 'updated');
+}
+function drawTime(seconds) {
+  const text = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+  const display = $('countdown');
+  if (!display.querySelector('.digit')) {
+    display.replaceChildren(...Array.from(text, char => {
+      const digit = document.createElement('span');
+      digit.className = char === ':' ? 'colon' : 'digit';
+      digit.textContent = char;
+      return digit;
+    }));
+  } else {
+    Array.from(display.children).forEach((digit, index) => {
+      if (digit.textContent !== text[index]) {
+        digit.textContent = text[index];
+        replayClass(digit, 'changed');
+      }
+    });
+  }
+}
+function drawProgress() {
+  $('progress').style.transform = `scaleX(${Math.max(0, Math.min(1, state.remaining / (state.minutes * 60)))})`;
+}
 function render() {
   const mode = MODES[state.mode];
   const seconds = Math.max(0, Math.ceil(state.remaining));
-  $('countdown').replaceChildren(document.createTextNode(String(Math.floor(seconds / 60)).padStart(2, '0')), Object.assign(document.createElement('span'), { textContent: ':' }), document.createTextNode(String(seconds % 60).padStart(2, '0')));
+  drawTime(seconds);
   $('heater').dataset.on = String(running());
   $('heater').dataset.mode = state.mode;
   $('heater').classList.toggle('is-starting', state.phase === 'starting');
@@ -20,9 +53,10 @@ function render() {
   $('power').setAttribute('aria-label', $('power-label').textContent);
   $('power').setAttribute('aria-pressed', String(running() || state.phase === 'starting'));
   $('stop').disabled = state.phase === 'idle';
-  $('progress').style.transform = `scaleX(${state.remaining / (state.minutes * 60)})`;
+  drawProgress();
+  $('modes').style.setProperty('--selected', Object.keys(MODES).indexOf(state.mode));
   $('load-title').textContent = state.demo ? `${mode.name} · 炉火演示` : `${mode.name} · ${mode.label}`;
-  $('load-description').textContent = state.demo ? '只播放视觉动效，不启动计算线程' : `${running() ? '运行中' : '启动后'}，${workerCount()} 个计算线程 / ${Math.round(mode.duty * 100)}% 工作占空比`;
+  $('load-description').textContent = state.demo ? '只播放视觉动效，不启动计算线程' : `${running() ? '运行中' : '开启后'} · ${state.mode === 'gentle' ? '轻量运行' : state.mode === 'cozy' ? '适中运行' : '较高负载'}，${state.minutes} 分钟后自动休息`;
   $('session-heading').textContent = running() ? '留一点时间，暖暖自己' : '一点温暖，刚刚好';
   $('session-copy').textContent = running() ? `${state.demo ? '炉火演示' : '设备暖手'}进行中，离开页面自动停止。` : `已选 ${state.minutes} 分钟，到点自动关机。`;
   document.querySelectorAll('[data-mode]').forEach(button => { if (button.tagName === 'BUTTON') button.setAttribute('aria-pressed', String(button.dataset.mode === state.mode)); });
@@ -41,6 +75,7 @@ function tick() {
   if (!running()) return;
   if (document.hidden) { stop('你离开了一会儿，小暖已自动停止。回来后需要手动开启。'); return; }
   state.remaining = Math.max(0, (state.endAt - monotonicNow()) / 1000);
+  drawProgress();
   if (state.remaining <= 0) { stop('时间到，暖炉已关闭。伸伸手，休息一下吧。', true); return; }
   const seconds = Math.ceil(state.remaining);
   if (seconds !== lastAnnounced) { lastAnnounced = seconds; render(); }
@@ -73,7 +108,10 @@ load.onFailure = message => {
     stop(ended ? '时间到，暖炉已关闭。伸伸手，休息一下吧。' : message, ended);
   }
 };
-$('power').addEventListener('click', () => state.phase === 'idle' ? start() : stop('暖炉已关闭。想暖一会儿时，再按电源。'));
+$('power').addEventListener('click', () => {
+  replayClass($('power'), 'pressed');
+  state.phase === 'idle' ? start() : stop('暖炉已关闭。想暖一会儿时，再按电源。');
+});
 $('stop').addEventListener('click', () => stop('已停止运行，计算线程已释放。'));
 $('modes').addEventListener('click', event => {
   const button = event.target.closest('button[data-mode]');
@@ -106,3 +144,30 @@ $('close-manual').addEventListener('click', () => manual.close());
 $('manual-done').addEventListener('click', () => manual.close());
 manual.addEventListener('click', event => { if (event.target === manual) { const r = manual.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) manual.close(); } });
 render();
+
+// A restrained pointer response on desktop only; touch and reduced-motion stay still.
+const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)');
+const heater = $('heater');
+let tiltFrame = 0;
+function resetTilt() {
+  cancelAnimationFrame(tiltFrame);
+  heater.classList.remove('is-tilting');
+  heater.style.removeProperty('--tilt-x');
+  heater.style.removeProperty('--tilt-y');
+}
+heater.addEventListener('pointermove', event => {
+  if (!finePointer.matches || reducedMotion.matches) return;
+  const rect = heater.getBoundingClientRect();
+  const x = ((event.clientX - rect.left) / rect.width - .5) * 3;
+  const y = -((event.clientY - rect.top) / rect.height - .5) * 2;
+  cancelAnimationFrame(tiltFrame);
+  tiltFrame = requestAnimationFrame(() => {
+    heater.classList.add('is-tilting');
+    heater.style.setProperty('--tilt-x', `${x.toFixed(2)}deg`);
+    heater.style.setProperty('--tilt-y', `${y.toFixed(2)}deg`);
+  });
+});
+heater.addEventListener('pointerleave', resetTilt);
+heater.addEventListener('pointercancel', resetTilt);
+reducedMotion.addEventListener('change', resetTilt);
+document.addEventListener('visibilitychange', () => { if (document.hidden) resetTilt(); });
