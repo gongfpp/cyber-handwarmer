@@ -16,10 +16,11 @@ async function asset(name, dependencies = []) {
   manifest[name] = filename;
 }
 // Resolve the module graph from the Worker upward so every import is versioned.
+await asset('adaptive-policy.js');
 await asset('load-worker.js');
-await asset('load-controller.js', ['load-worker.js']);
+await asset('load-controller.js', ['load-worker.js', 'adaptive-policy.js']);
 await asset('gpu-worker.js');
-await asset('gpu-controller.js', ['gpu-worker.js', 'load-controller.js']);
+await asset('gpu-controller.js', ['gpu-worker.js', 'load-controller.js', 'adaptive-policy.js']);
 await asset('app.js', ['load-controller.js', 'gpu-controller.js']);
 await asset('style.css');
 await asset('icon.svg');

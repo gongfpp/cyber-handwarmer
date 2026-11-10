@@ -1,80 +1,117 @@
-export const MODES = Object.freeze({
-  gentle: { name: '轻柔', duty: 0.30, threads: 2, label: '轻量计算' },
-  cozy: { name: '温暖', duty: 0.65, threads: 4, label: '多核计算' },
-  toasty: { name: '热烈', duty: 0.92, threads: 8, label: '高强度计算' },
-});
+import { MODES, deviceCapabilities, cpuProfile, adaptCPU, calibratedBatch } from './adaptive-policy.js';
+export { MODES };
 export const monotonicNow = () => performance.timeOrigin + performance.now();
-export const workerCount = (mode = 'gentle') => Math.max(1, Math.min(MODES[mode].threads, (navigator.hardwareConcurrency || 4) - 2));
-
-// A new pool owns each run. Mode changes resize it and retain the same deadline.
+export const workerCount = (mode = 'gentle') => cpuProfile(mode, deviceCapabilities()).maxCount;
 export class LoadController {
-  workers = [];
-  heartbeat = null;
-  generation = 0;
-  configuration = null;
-  pending = new Set();
-  onFailure = () => {};
-
-  async start(mode, endAt) {
-    this.stop();
+  workers = []; records = new Map(); generation = 0; configuration = null;
+  heartbeat = null; governor = null; calibration = null; device = deviceCapabilities();
+  adaptive = null; profile = null; peakLag = 0; lastBeat = 0;
+  onFailure = () => {}; onConfig = () => {};
+  fail(generation) {
+    if (generation !== this.generation) return;
+    this.stop(); this.onFailure('计算已停止');
+  }
+  addWorker(startOnReady = true) {
     const generation = this.generation;
-    this.configuration = { duty: MODES[mode].duty, count: workerCount(mode), endAt };
+    const worker = new Worker(new URL('./load-worker.js', import.meta.url));
+    this.workers.push(worker);
+    const record = { ready: false, stats: null, statsAt: 0, benchmark: null, cancel: null, startOnReady };
+    this.records.set(worker, record);
+    return new Promise(resolve => {
+      const finish = result => { clearTimeout(timeout); record.cancel = null; resolve(result); };
+      const timeout = setTimeout(() => { finish(false); this.fail(generation); }, 3000);
+      record.cancel = () => finish(false);
+      worker.addEventListener('message', ({ data }) => {
+        if (generation !== this.generation || !this.records.has(worker)) return;
+        if (data.type === 'ready') { record.ready = true; if (record.startOnReady) this.send(worker, 'start'); finish(true); }
+        if (data.type === 'benchmark') record.benchmark?.(data);
+        if (data.type === 'stats') { record.stats = data; record.statsAt = monotonicNow(); }
+        if (data.type === 'stopped') this.fail(generation);
+      });
+      worker.addEventListener('error', () => { finish(false); this.fail(generation); });
+    });
+  }
+  send(worker, type = 'update') {
+    if (!this.configuration) return;
+    worker.postMessage({ type, ...this.configuration, batchSize: calibratedBatch(this.calibration?.iterationsPerMs), offset: this.workers.indexOf(worker) * 4 });
+  }
+  resize(count) {
+    while (this.workers.length > count) {
+      const worker = this.workers.pop(), record = this.records.get(worker);
+      this.records.delete(worker); record?.cancel?.(); record?.benchmark?.(null); worker.terminate();
+    }
+    const ready = [];
+    try { while (this.workers.length < count) ready.push(this.addWorker(true)); } catch { this.fail(this.generation); }
+    return ready;
+  }
+  async start(mode, endAt) {
+    this.stop(); const generation = this.generation;
+    this.device = deviceCapabilities(); this.profile = cpuProfile(mode, this.device);
+    this.adaptive = { count: this.profile.initialCount, duty: this.profile.initialDuty, healthy: 0, strained: 0 };
+    this.configuration = { mode, endAt, duty: this.adaptive.duty };
     try {
-      if (!('Worker' in window)) throw new Error('WORKER_UNAVAILABLE');
-      const ready = [];
-      for (let i = 0; i < this.configuration.count; i++) {
-        const worker = new Worker(new URL('./load-worker.js', import.meta.url));
-        this.workers.push(worker);
-        ready.push(new Promise((resolve, reject) => {
-          const cancel = () => { clearTimeout(timeout); this.pending.delete(cancel); reject(new Error('CANCELLED')); };
-          const timeout = setTimeout(() => { this.pending.delete(cancel); reject(new Error('WORKER_TIMEOUT')); }, 3000);
-          this.pending.add(cancel);
-          worker.addEventListener('message', event => {
-            if (event.data.type === 'ready') { clearTimeout(timeout); this.pending.delete(cancel); resolve(); }
-            if (event.data.type === 'stopped' && generation === this.generation) {
-              this.stop(); this.onFailure('计算已自动停止，请重新开启。');
-            }
-          });
-          worker.addEventListener('error', () => {
-            clearTimeout(timeout); this.pending.delete(cancel);
-            if (generation === this.generation) {
-              this.stop(); this.onFailure('计算线程未能运行。可以切换「仅看炉火」继续体验。');
-            }
-            reject(new Error('WORKER_ERROR'));
-          });
-        }));
+      if (!('Worker' in window)) throw new Error('UNAVAILABLE');
+      const ready = await this.addWorker(false);
+      if (!ready || generation !== this.generation) return false;
+      if (!this.calibration) {
+        const worker = this.workers[0], record = this.records.get(worker);
+        const result = await new Promise(resolve => {
+          const timeout = setTimeout(() => resolve(null), 800);
+          record.benchmark = result => { clearTimeout(timeout); record.benchmark = null; resolve(result); };
+          worker.postMessage({ type: 'benchmark' });
+        });
+        if (generation !== this.generation) return false;
+        this.calibration = result || { iterationsPerMs: 600, fallback: true };
       }
-      await Promise.all(ready);
-      if (generation !== this.generation) return false;
-      if (document.hidden || monotonicNow() >= this.configuration.endAt) { this.stop(); return false; }
-      this.workers.forEach((worker, index) => worker.postMessage({ type: 'start', ...this.configuration, offset: index * 12 }));
+      if (document.hidden || monotonicNow() >= endAt) { this.stop(); return false; }
+      this.lastBeat = monotonicNow();
       this.heartbeat = setInterval(() => {
-        if (document.hidden || monotonicNow() >= this.configuration.endAt) { this.stop(); this.onFailure('本次暖手已结束。'); return; }
+        const time = monotonicNow();
+        if (document.hidden || time >= this.configuration.endAt) { this.fail(generation); return; }
+        this.peakLag = Math.max(this.peakLag, time - this.lastBeat - 250); this.lastBeat = time;
         for (const worker of this.workers) worker.postMessage({ type: 'heartbeat' });
       }, 250);
-      return true;
-    } catch (error) {
+      this.send(this.workers[0], 'start');
+      await Promise.all(this.resize(this.adaptive.count));
       if (generation !== this.generation) return false;
-      this.stop(); throw error;
+      this.governor = setInterval(() => this.tune(), 750);
+      this.onConfig(); return true;
+    } catch {
+      if (generation === this.generation) this.fail(generation);
+      return false;
     }
   }
-
+  tune() {
+    if (!this.configuration || document.hidden) return;
+    const recent = [...this.records.values()].filter(r => r.stats && monotonicNow() - r.statsAt < 2000);
+    const overrun = recent.length ? recent.reduce((sum, r) => sum + r.stats.overrunMs, 0) / recent.length : 0;
+    const next = adaptCPU(this.adaptive, this.profile, { mainLagMs: this.peakLag, workerOverrunMs: overrun });
+    this.peakLag = 0; this.adaptive = next; this.configuration.duty = next.duty;
+    this.resize(next.count);
+    for (const [worker, record] of this.records) if (record.ready) this.send(worker);
+    this.onConfig();
+  }
   update(mode, endAt) {
-    const count = workerCount(mode);
-    if (count !== this.workers.length) {
-      void this.start(mode, endAt).catch(() => this.onFailure('计算线程未能运行，请重新开启。'));
-      return;
-    }
-    this.configuration = { duty: MODES[mode].duty, count, endAt };
-    for (const worker of this.workers) worker.postMessage({ type: 'update', ...this.configuration });
+    if (!this.configuration) return;
+    const changed = mode !== this.configuration.mode;
+    this.profile = cpuProfile(mode, this.device);
+    if (changed) this.adaptive = { count: this.profile.initialCount, duty: this.profile.initialDuty, healthy: 0, strained: 0 };
+    this.configuration = { mode, endAt, duty: this.adaptive.duty };
+    this.resize(this.adaptive.count);
+    for (const [worker, record] of this.records) if (record.ready) this.send(worker);
+    this.onConfig();
   }
-
+  description(mode) {
+    const target = cpuProfile(mode, this.device);
+    const config = this.configuration;
+    return `${this.device.logical} 个逻辑处理器${this.device.reportedCores ? '' : '（默认估计）'} · 自动 ${config ? this.workers.length : target.maxCount} 线程 · 工作比例 ${Math.round((config?.duty || target.targetDuty) * 100)}%${this.calibration && !this.calibration.fallback ? ' · 已校准' : ''}`;
+  }
   stop() {
-    this.generation++;
-    clearInterval(this.heartbeat); this.heartbeat = null;
-    for (const worker of this.workers) worker.terminate();
-    this.workers = [];
-    for (const cancel of [...this.pending]) cancel();
-    this.configuration = null;
+    this.generation++; clearInterval(this.heartbeat); clearInterval(this.governor); this.heartbeat = null; this.governor = null;
+    for (const worker of this.workers) {
+      const record = this.records.get(worker); record?.cancel?.(); record?.benchmark?.(null); worker.terminate();
+    }
+    this.workers = []; this.records.clear(); this.configuration = null; this.peakLag = 0;
+    this.onConfig();
   }
 }

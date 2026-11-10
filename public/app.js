@@ -1,4 +1,4 @@
-import { LoadController, MODES, workerCount, monotonicNow } from './load-controller.js';
+import { LoadController, MODES, monotonicNow } from './load-controller.js';
 import { GPUController } from './gpu-controller.js';
 const $ = id => document.getElementById(id);
 const cpu = new LoadController();
@@ -39,7 +39,7 @@ function render() {
   $('gpu').closest('.source').classList.toggle('is-active', gpu.active);
   $('gpu').closest('.source').classList.toggle('has-error', !!state.gpuError);
   $('gpu').setAttribute('aria-label', state.gpuError ? `GPU：${state.gpuError}` : 'GPU');
-  $('cpu-detail').textContent = `${workerCount(state.mode)} 个线程，每线程 ${Math.round(MODES[state.mode].duty * 100)}% 工作占空比。不是整机 CPU 使用率。`;
+  $('cpu-detail').textContent = cpu.description(state.mode);
   if (!gpu.active) $('gpu-detail').textContent = state.gpuError || (state.gpu ? '待启动' : '未开启');
   document.querySelectorAll('button[data-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === state.mode)));
   document.querySelectorAll('button[data-minutes]').forEach(button => button.setAttribute('aria-pressed', String(Number(button.dataset.minutes) === state.minutes)));
@@ -76,6 +76,7 @@ async function start() {
     state.phase = 'running'; lastSecond = null; tick(); ticker = setInterval(tick, 100); render();
   } catch { if (state.token === token) stop('无法启动计算'); }
 }
+cpu.onConfig = () => { $('cpu-detail').textContent = cpu.description(state.mode); };
 cpu.onFailure = () => {
   if (state.phase === 'idle') return;
   const completed = state.endAt <= monotonicNow();
@@ -88,7 +89,7 @@ gpu.onStatus = (status, reason) => {
   }
 };
 gpu.onStats = stats => {
-  $('gpu-detail').textContent = `WebGL2 · ${stats.side} × ${stats.side} · 已完成 ${stats.frames} 帧。单批等待 ${stats.batchMs}ms，不代表 GPU 使用率。`;
+  $('gpu-detail').textContent = `${stats.renderer || 'WebGL2'} · 自动 ${stats.side}×${stats.side} / ${stats.steps} 次迭代 · ${stats.gpuMs ? `GPU 计时 ${stats.gpuMs}ms` : `完成等待 ${stats.batchMs}ms`} / 批。不是整机 GPU 使用率。`;
 };
 $('power').addEventListener('click', () => state.phase === 'idle' ? start() : stop());
 $('modes').addEventListener('click', event => {
@@ -133,7 +134,6 @@ document.querySelector('.skins').addEventListener('click', event => {
   if (button) { state.skin = button.dataset.skin; document.body.dataset.skin = state.skin; render(); }
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden && state.phase !== 'idle') stop(); });
-window.addEventListener('blur', () => { if (state.phase !== 'idle') stop(); });
 window.addEventListener('pagehide', () => stop());
 document.addEventListener('freeze', () => stop());
 window.addEventListener('pageshow', event => { if (event.persisted) stop(); });

@@ -1,3 +1,4 @@
+import { deviceCapabilities } from './adaptive-policy.js';
 import { monotonicNow } from './load-controller.js';
 const reasons = {
   'software-renderer': '浏览器使用软件渲染，无法调用硬件 GPU。',
@@ -11,6 +12,7 @@ export class GPUController {
   generation = 0;
   heartbeat = null;
   endAt = 0;
+  device = null; lastBeat = 0;
   pendingCancel = null;
   onStatus = () => {};
   onStats = () => {};
@@ -30,13 +32,14 @@ export class GPUController {
         this.pendingCancel = () => finish({ ok: false, cancelled: true });
         worker.onmessage = ({ data }) => {
           if (generation !== this.generation) return;
-          if (data.type === 'ready') worker.postMessage({ type: 'start', mode, endAt });
+          if (data.type === 'ready') worker.postMessage({ type: 'start', mode, endAt, memoryGiB: deviceCapabilities().memoryGiB });
           if (data.type === 'running') {
             if (document.hidden || monotonicNow() >= this.endAt) { this.stop(); return; }
-            this.active = true;
+            this.active = true; this.device = data.device || null; this.lastBeat = monotonicNow();
             this.heartbeat = setInterval(() => {
               if (document.hidden || monotonicNow() >= this.endAt) { this.stop(); return; }
-              worker.postMessage({ type: 'heartbeat' });
+              const time = monotonicNow(), mainLagMs = Math.max(0, time - this.lastBeat - 250); this.lastBeat = time;
+              worker.postMessage({ type: 'heartbeat', mainLagMs });
             }, 250);
             finish({ ok: true }); this.onStatus('running');
           }

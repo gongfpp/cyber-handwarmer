@@ -1,3 +1,4 @@
+import './verify-policy.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
@@ -6,8 +7,8 @@ const base = (process.env.TEST_URL || 'http://127.0.0.1:4173').replace(/\/?$/, '
 const checks = [];
 const args = process.env.TEST_GPU_BACKEND === 'metal' ? ['--use-angle=metal'] : [];
 const browser = await chromium.launch({ headless: true, args });
-async function instrument() {
-  Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+async function instrument(cores = 8) {
+  Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => cores });
   window.__pool = [];
   const NativeWorker = window.Worker;
   window.Worker = class extends NativeWorker {
@@ -21,10 +22,10 @@ async function instrument() {
     terminate() { this.entry.terminated = true; return super.terminate(); }
   };
 }
-async function contextFor(target = browser) {
+async function contextFor(target = browser, cores = 8) {
   const context = await target.newContext({ viewport: { width: 1440, height: 1050 } });
   context.setDefaultTimeout(12000); context.setDefaultNavigationTimeout(30000);
-  await context.addInitScript(instrument); return context;
+  await context.addInitScript(instrument, cores); return context;
 }
 const context = await contextFor();
 const manifestResponse = await context.request.get(new URL('asset-manifest.json', base).href);
@@ -47,15 +48,16 @@ try {
   assert.equal(await page.evaluate(() => window.__pool.length), 0);
   checks.push('首次打开、预选档位和时间均不创建 CPU / GPU Worker');
   await page.locator('#power').click(); await lit();
-  let workers = await liveCPU(); assert.equal(workers.length, 6);
-  assert(workers.every(w => w.sent.some(m => m.type === 'start' && m.duty === .92)));
-  checks.push('8 核浏览器热烈档：6 个真实 CPU Worker，目标工作占空比 92%');
+  await page.waitForFunction(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated && w.sent.some(m => m.duty >= .98)).length === 8);
+  let workers = await liveCPU(); assert.equal(workers.length, 8);
+  assert(workers.some(w => w.sent.some(m => m.type === 'benchmark')));
+  checks.push('8 核浏览器自动校准并升至 8 个 CPU Worker，目标工作比例 99%');
   await page.locator('button[data-mode=cozy]').click();
-  await page.waitForFunction(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated && w.sent.some(m => m.type === 'start' && m.duty === .65)).length === 4);
+  await page.waitForFunction(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated && w.sent.some(m => m.duty >= .81)).length === 6);
   await page.locator('[data-minutes="5"]').click();
   assert.equal(await page.locator('#countdown').textContent(), '05:00');
   await page.locator('button[data-mode=gentle]').click();
-  await page.waitForFunction(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated && w.sent.some(m => m.type === 'start' && m.duty === .30)).length === 2);
+  await page.waitForFunction(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated && w.sent.some(m => m.duty === .40)).length === 2);
   checks.push('运行中档位改变线程数，修改定时重新计时');
   await page.locator('#power').click(); await off(); checks.push('停止释放全部计算线程');
   await page.locator('#cpu').uncheck();
@@ -80,11 +82,16 @@ try {
   await off(); await page.evaluate(() => { delete document.hidden; document.dispatchEvent(new Event('visibilitychange')); });
   assert.equal(await page.locator('#heater').getAttribute('data-on'), 'false');
   checks.push('隐藏页面停止，返回不自动重启');
-  for (const event of ['blur', 'pagehide']) {
+  await page.locator('#power').click(); await lit();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  assert.equal(await page.locator('#heater').getAttribute('data-on'), 'true');
+  await page.locator('#power').click(); await off();
+  checks.push('失焦但网页可见时继续计算，便于并排查看活动监视器');
+  for (const event of ['pagehide']) {
     await page.locator('#power').click(); await lit();
     await page.evaluate(event => window.dispatchEvent(new Event(event)), event); await off();
   }
-  checks.push('失去窗口焦点和离开页面均终止计算');
+  checks.push('离开页面终止计算');
   await page.locator('#open-manual').click(); assert(await page.locator('#manual').isVisible());
   await page.keyboard.press('Escape'); assert(!(await page.locator('#manual').isVisible()));
   checks.push('帮助面板可用并支持 Escape');
@@ -119,9 +126,14 @@ try {
   await real.waitForFunction(() => window.__pool.some(w => /gpu-worker/.test(w.url) && w.received.some(m => m.type === 'stats' || m.type === 'unavailable')));
   const hardware = await real.evaluate(() => window.__pool.some(w => /gpu-worker/.test(w.url) && w.received.some(m => m.type === 'stats')));
   if (hardware) {
-    await real.waitForFunction(() => window.__pool.some(w => /gpu-worker/.test(w.url) && w.received.some(m => m.type === 'stats' && m.frames >= 3 && m.steps === 384)));
+    await real.waitForFunction(() => window.__pool.some(w => /gpu-worker/.test(w.url) && w.received.some(m => m.type === 'stats' && m.frames >= 3 && m.steps >= 384)));
+    const timed = await real.evaluate(() => window.__pool.some(w => /gpu-worker/.test(w.url) && w.received.some(m => m.type === 'running' && m.device?.timerQueries)));
+    if (timed) {
+      await real.waitForFunction(() => window.__pool.some(w => /gpu-worker/.test(w.url) && w.received.some(m => m.type === 'stats' && m.gpuMs > 0 && m.measurement === 'gpu-timer')));
+      checks.push('GPU 硬件计时扩展返回实际计算耗时，用于自适应校准');
+    }
     await real.locator('#cpu').check();
-    await real.waitForFunction(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated && w.sent.some(m => m.duty === .92)).length === 6);
+    await real.waitForFunction(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated && w.sent.some(m => m.duty >= .98)).length === 8);
     const start = Date.now(); await real.locator('#power').click();
     await real.waitForFunction(() => window.__pool.every(w => w.terminated));
     assert(Date.now() - start < 1000);
@@ -129,8 +141,11 @@ try {
     await real.locator('#cpu').uncheck(); await real.locator('#power').click();
     await real.waitForFunction(() => document.querySelector('#gpu').closest('.source').classList.contains('is-active'));
     await real.evaluate(() => window.dispatchEvent(new Event('blur')));
+    assert.equal(await real.locator('#heater').getAttribute('data-on'), 'true');
+    await real.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange')); });
     await real.waitForFunction(() => window.__pool.every(w => w.terminated));
-    checks.push('GPU 运行时失去焦点释放 Worker');
+    await real.evaluate(() => { delete document.hidden; });
+    checks.push('GPU 可见时失焦继续运行，页面隐藏时释放 Worker');
     const gpuSelfStop = await real.evaluate(async path => {
       async function run(duration, heartbeat) {
         return new Promise((resolve, reject) => {
@@ -157,6 +172,12 @@ try {
   await race.goto(base); await race.locator('#power').click(); await race.locator('#power').click(); await race.waitForTimeout(350);
   assert.equal(await race.locator('#heater').getAttribute('data-on'), 'false'); assert(await race.evaluate(() => window.__pool.every(w => w.terminated)));
   checks.push('启动中取消不会被迟到的就绪事件重启');
+  const smallContext = await contextFor(browser, 2); const small = await smallContext.newPage();
+  await small.goto(base); await small.locator('button[data-mode=toasty]').click(); await small.locator('#power').click();
+  await small.waitForFunction(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated).length === 2);
+  assert((await small.locator('#cpu-detail').textContent()).includes('2 个逻辑处理器'));
+  await small.locator('#power').click(); await smallContext.close();
+  checks.push('浏览器报告 2 核时自动使用 2 线程，区别于 8 核设备');
   await realContext.close(); assert.deepEqual(errors, []); checks.push('正常流程无页面 JavaScript 异常');
   console.log(JSON.stringify({ engine: 'Chromium', backend: process.env.TEST_GPU_BACKEND || 'default', passed: checks.length, checks }, null, 2));
 } finally { await browser.close(); }
