@@ -109,6 +109,16 @@ try {
     assert(geometry.left >= 0 && geometry.right <= width);
   }
   checks.push('320 / 375 / 390 / 768 / 1024 / 1440 / 1920 px 布局无横向溢出');
+  await page.locator('#demo').check();
+  await page.locator('#power').click();
+  for (const width of [320, 390, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.waitForTimeout(250);
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `lit-state overflow at ${width}`);
+  }
+  await page.locator('#stop').click();
+  checks.push('开机光晕在五种视口宽度内不产生横向滚动');
+
   const errorContext = await browser.newContext();
   errorContext.setDefaultTimeout(10000);
   await errorContext.addInitScript(instrumentWorkers);

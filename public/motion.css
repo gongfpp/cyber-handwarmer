@@ -78,3 +78,8 @@ dialog[open]::backdrop { animation:backdrop-enter .3s ease-out; }
 .digits .colon { opacity:.5; }
 
 .digits { display:block; white-space:nowrap; }
+/* Keep the expanding desk glow inside phone viewports while the heater is on. */
+@media(max-width:900px) {
+  .ambient { width:100%; max-width:100%; }
+  body:has(.heater[data-on=true]) .ambient { transform:scale(1.06); }
+}
