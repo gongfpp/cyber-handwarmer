@@ -1,7 +1,29 @@
-import { cp, mkdir, rm } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
-await rm(`${root}dist`, { recursive: true, force: true });
-await mkdir(`${root}dist`, { recursive: true });
-await cp(`${root}public`, `${root}dist`, { recursive: true });
-console.log('静态成品已生成：dist/（无需安装依赖）');
+const output = `${root}dist/`;
+await rm(output, { recursive: true, force: true });
+await mkdir(output, { recursive: true });
+const manifest = {};
+async function asset(name, dependencies = []) {
+  let content = await readFile(`${root}public/${name}`, 'utf8');
+  for (const dependency of dependencies) content = content.replaceAll(`./${dependency}`, `./${manifest[dependency]}`);
+  const hash = createHash('sha256').update(content).digest('hex').slice(0, 12);
+  const dot = name.lastIndexOf('.');
+  const filename = `${name.slice(0, dot)}.${hash}${name.slice(dot)}`;
+  await writeFile(output + filename, content);
+  manifest[name] = filename;
+}
+// Resolve the module graph from the Worker upward so every import is versioned.
+await asset('load-worker.js');
+await asset('load-controller.js', ['load-worker.js']);
+await asset('app.js', ['load-controller.js']);
+await asset('style.css');
+await asset('motion.css');
+await asset('icon.svg');
+let html = await readFile(`${root}public/index.html`, 'utf8');
+for (const [name, filename] of Object.entries(manifest)) html = html.replaceAll(`./${name}`, `./${filename}`);
+await writeFile(output + 'index.html', html);
+await writeFile(output + 'asset-manifest.json', JSON.stringify(manifest, null, 2) + '\n');
+console.log('静态成品已生成：dist/（资源文件按内容生成版本，防止旧缓存混用）');

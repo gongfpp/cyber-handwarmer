@@ -1,6 +1,6 @@
 # 开发说明
 
-小暖使用原生 HTML、CSS、JavaScript modules 和同源 Web Workers。运行与构建不需要第三方依赖。
+小暖使用原生 HTML、CSS、JavaScript modules 和同源 Web Workers。运行与构建不需要第三方依赖。生产构建会给样式、脚本、Worker 和图标生成内容指纹，首页引用对应的版本；`asset-manifest.json` 用于核对产物和独立 Worker 检查。
 
 ## 目录
 

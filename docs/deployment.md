@@ -1,8 +1,10 @@
 # 部署到腾讯云 EdgeOne
 
-目标域名：<https://warm.gongfpp.icu/>。
+正式域名：<https://warm.gongfpp.icu/>。
 
 EdgeOne 默认访问地址：<https://cyber-handwarmer-a0z0axp0.edgeone.dev/>。项目名 `cyber-handwarmer`，采用直接上传，当前发布区域为海外。
+
+正式域名的 CNAME 为 `warm.gongfpp.icu.pages.dnsoe5.com`，已配置自动验证的免费 HTTPS 证书。实际访问应以域名与证书检查结果为准。
 
 项目是纯静态网站，不需要服务器、数据库或环境变量。先运行：
 
@@ -10,7 +12,7 @@ EdgeOne 默认访问地址：<https://cyber-handwarmer-a0z0axp0.edgeone.dev/>。
 npm run build
 ```
 
-`dist/` 里包含网站所需的 HTML、CSS、JavaScript 和图标。源代码、README 与截图不需要上传到托管目录。
+`dist/` 里包含网站所需的 HTML、CSS、JavaScript 和图标。构建会给资源文件名加入内容指纹，并同步更新模块与 Worker 路径，避免发布后混入旧版边缘缓存。源代码、README 与截图不需要上传到托管目录。
 
 ## 使用 EdgeOne CLI
 

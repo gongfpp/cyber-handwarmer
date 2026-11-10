@@ -22,6 +22,8 @@ const instrumentWorkers = () => {
   };
 };
 await context.addInitScript(instrumentWorkers);
+const manifestResponse = await context.request.get(new URL('asset-manifest.json', base.endsWith('/') ? base : base + '/').href);
+const workerPath = manifestResponse.ok() ? (await manifestResponse.json())['load-worker.js'] : 'load-worker.js';
 const page = await context.newPage();
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
@@ -78,10 +80,10 @@ try {
   const independentContext = await browser.newContext();
   const independentPage = await independentContext.newPage();
   await independentPage.goto(base);
-  const independent = await independentPage.evaluate(async () => {
+  const independent = await independentPage.evaluate(async workerPath => {
     async function run(duration, heartbeat) {
       return new Promise((resolve, reject) => {
-        const worker = new Worker('./load-worker.js'); let beat;
+        const worker = new Worker(workerPath); let beat;
         const timeout = setTimeout(() => { worker.terminate(); clearInterval(beat); reject(new Error('worker did not self-stop')); }, 5000);
         worker.onmessage = ({ data }) => {
           if (data.type === 'ready') {
@@ -93,7 +95,7 @@ try {
       });
     }
     return [await run(250, true), await run(5000, false)];
-  });
+  }, workerPath);
   await independentContext.close();
   assert.deepEqual(independent, ['deadline', 'heartbeat']); checks.push('Worker 独立到期自停与心跳丢失自停（真实时钟）');
   await page.goto(base);
@@ -123,14 +125,14 @@ try {
   errorContext.setDefaultTimeout(10000);
   await errorContext.addInitScript(instrumentWorkers);
   const failure = await errorContext.newPage();
-  await failure.route('**/load-worker.js', route => route.abort());
+  await failure.route('**/load-worker*.js', route => route.abort());
   await failure.goto(base); await failure.locator('#power').click();
   await failure.waitForFunction(() => document.querySelector('#feedback-text').textContent.includes('无法启动') || document.querySelector('#feedback-text').textContent.includes('未能运行'));
   assert.equal(await failure.locator('#heater').getAttribute('data-on'), 'false');
   assert((await failure.evaluate(() => window.__pool)).every(w => w.terminated)); await failure.close();
   checks.push('Worker 加载失败关闭并给出演示模式提示');
   const race = await errorContext.newPage();
-  await race.route('**/load-worker.js', async route => { await new Promise(resolve => setTimeout(resolve, 250)); await route.continue().catch(() => {}); });
+  await race.route('**/load-worker*.js', async route => { await new Promise(resolve => setTimeout(resolve, 250)); await route.continue().catch(() => {}); });
   await race.goto(base);
   await race.locator('#power').click(); await race.locator('#power').click();
   await race.waitForTimeout(500);
