@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile, cp } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -25,7 +25,8 @@ await asset('gpu-controller.js', ['gpu-worker.js', 'load-controller.js', 'adapti
 await asset('fire-sound.js');
 await asset('shutdown-atmosphere.js');
 await asset('shutdown.js', ['shutdown-atmosphere.js']);
-await asset('app.js', ['load-controller.js', 'gpu-controller.js', 'adaptive-policy.js', 'fire-sound.js', 'shutdown.js']);
+await asset('community.js');
+await asset('app.js', ['load-controller.js', 'gpu-controller.js', 'adaptive-policy.js', 'fire-sound.js', 'shutdown.js', 'community.js']);
 await asset('style.css');
 await asset('icon.svg');
 let html = await readFile(`${root}public/index.html`, 'utf8');
@@ -33,3 +34,7 @@ for (const [name, filename] of Object.entries(manifest)) html = html.replaceAll(
 await writeFile(output + 'index.html', html);
 await writeFile(output + 'asset-manifest.json', JSON.stringify(manifest, null, 2) + '\n');
 console.log('静态成品已生成：dist/（资源文件按内容生成版本，防止旧缓存混用）');
+
+await cp(root + 'edge-functions', output + 'edge-functions', { recursive: true });
+const pkg=JSON.parse(await readFile(root+'package.json','utf8'));
+await writeFile(output+'package.json',JSON.stringify({type:'module',dependencies:pkg.dependencies},null,2)+'\n');

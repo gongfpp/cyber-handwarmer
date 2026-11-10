@@ -3,10 +3,12 @@ import { deviceCapabilities } from './adaptive-policy.js';
 import { GPUController } from './gpu-controller.js';
 import { FireSound } from './fire-sound.js';
 import { Shutdown } from './shutdown.js';
+import { Community } from './community.js';
 const $ = id => document.getElementById(id);
 const cpu = new LoadController();
 const gpu = new GPUController();
 const sound = new FireSound();
+const community = new Community($('community'));
 const shutdown = new Shutdown($('heater'));
 const available = { cpu: deviceCapabilities().cpuAvailable, gpu: true };
 const sourceRequests = { cpu: 0, gpu: 0 };
@@ -76,6 +78,7 @@ function render() {
   document.querySelectorAll('button[data-skin]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.skin === state.skin)));
 }
 function stop(message = '', completed = false, immediate = false) {
+  community.stop(immediate || document.hidden);
   const animate = running() && !immediate && !document.hidden && !reducedMotion.matches;
   const token = ++state.token; sourceRequests.cpu++; sourceRequests.gpu++;
   shutdown.cancel(); state.phase = animate ? 'ending' : 'idle';
@@ -128,7 +131,7 @@ async function start() {
     await fallbackCPU(token);
   }
   if (state.token !== token) return;
-  state.phase = 'running'; sound.start(state.mode, state.skin); lastSecond = null; tick(); ticker = setInterval(tick, 100); render();
+  state.phase = 'running'; community.start(); sound.start(state.mode, state.skin); lastSecond = null; tick(); ticker = setInterval(tick, 100); render();
 }
 cpu.onConfig = renderTelemetry;
 cpu.onTelemetry = renderTelemetry; gpu.onTelemetry = renderTelemetry;

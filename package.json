@@ -1,6 +1,6 @@
 {
   "name": "a-little-warmth",
-  "version": "2.5.1",
+  "version": "2.6.0",
   "private": true,
   "type": "module",
   "description": "小暖 · CPU / GPU 暖手与北欧壁炉展示",
@@ -11,12 +11,16 @@
     "verify": "node scripts/verify.mjs",
     "verify:mobile": "node scripts/verify-mobile.mjs",
     "verify:status": "node scripts/verify-status-sound.mjs",
-    "verify:ending": "node scripts/verify-ending.mjs"
+    "verify:ending": "node scripts/verify-ending.mjs",
+    "verify:community": "node scripts/verify-community.mjs"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/gongfpp/cyber-handwarmer.git"
   },
-  "homepage": "https://warm.gongfpp.icu/"
+  "homepage": "https://warm.gongfpp.icu/",
+  "dependencies": {
+    "@edgeone/pages-blob": "0.0.19"
+  }
 }
