@@ -1,5 +1,13 @@
 // One anonymous browser ID, only created after the visitor switches the appliance on.
-const identifier = () => crypto.randomUUID();
+const identifier = () => {
+  try {
+    if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
+    const bytes=crypto.getRandomValues(new Uint8Array(16));
+    bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;
+    const hex=[...bytes].map(value=>value.toString(16).padStart(2,'0')).join('');
+    return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+  } catch { return null; }
+};
 const publicHosts = new Set(['warm.gongfpp.icu','cyber-handwarmer-a0z0axp0.edgeone.dev']);
 const format = new Intl.NumberFormat('zh-CN',{maximumFractionDigits:1});
 export class Community {
@@ -25,7 +33,8 @@ export class Community {
     let visitorId;
     try { visitorId=localStorage.getItem('little-warmth-visitor');if(!visitorId){visitorId=identifier();localStorage.setItem('little-warmth-visitor',visitorId);} }
     catch { visitorId=identifier(); }
-    const run=this.run={visitorId,runId:identifier(),began:performance.now()};
+    const runId=identifier();if(!visitorId||!runId)return;
+    const run=this.run={visitorId,runId,began:performance.now()};
     this.ready.then(()=>{if(this.run===run&&this.canTrack())this.report(run);});
     this.timer=setInterval(()=>{if(this.run===run)this.report(run);},30000);
   }

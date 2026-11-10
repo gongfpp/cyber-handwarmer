@@ -25,6 +25,7 @@ if(process.env.TEST_URL){
   const base=process.env.TEST_URL.replace(/\/$/,'');const errors=[];
   try{
     const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+    await context.addInitScript(()=>Object.defineProperty(crypto,'randomUUID',{value:undefined}));
     const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));const payloads=[];
     page.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/api/warmth'))payloads.push(r.postDataJSON());});
     await page.goto(`${base}/?stats_test=1`);
