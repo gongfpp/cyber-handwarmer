@@ -73,7 +73,7 @@ export class FireSound {
     source.onended = () => { source.disconnect(); filter.disconnect(); envelope.disconnect(); g.pops.delete(source); };
     source.start(); source.stop(time + .12);
   }
-  extinguish() {
+  extinguish(skin = 'nordic') {
     this.stop(true, false);
     const context = this.context;
     if (!context || context.state !== 'running') return;
@@ -89,6 +89,10 @@ export class FireSound {
         source.start(time + delay); source.stop(time + delay + duration);
         outro.nodes.push(source, filter, gain); outro.sources.push(source);
       };
+      if (skin === 'retro') {
+        hiss(.17, .035, .08, 1600); hiss(1.16, .07, .025, 400); hiss(2.01, .045, .11, 1800);
+        outro.timer = setTimeout(() => { if (this.outro === outro) this.stop(true); }, 2300); return;
+      }
       hiss(.46, .48, .065, 2400); hiss(1.13, .09, .055, 900); hiss(2.04, .2, .045, 2100);
       const drop = context.createOscillator(), gain = context.createGain();
       drop.frequency.setValueAtTime(620, time + 2.01); drop.frequency.exponentialRampToValueAtTime(190, time + 2.10);

@@ -12,7 +12,7 @@ async function instrument(){
   constructor(...args){super(...args);this.record={url:String(args[0]),terminated:false,received:[]};window.__workers.push(this.record);this.addEventListener('message',e=>this.record.received.push(e.data));}
   terminate(){this.record.terminated=true;return super.terminate();}
  };
- const Audio=window.AudioContext;if(Audio)window.AudioContext=new Proxy(Audio,{construct(t,args){const c=Reflect.construct(t,args);window.__audio.push(c);return c;}});
+ const Audio=window.AudioContext;if(Audio)window.AudioContext=new Proxy(Audio,{construct(t,args){const c=Reflect.construct(t,args);c.__oscillators=0;const create=c.createOscillator.bind(c);c.createOscillator=()=>{c.__oscillators++;return create();};window.__audio.push(c);return c;}});
 }
 async function setup(options={}){
  const c=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,...options});c.setDefaultTimeout(12000);await c.addInitScript(instrument);
@@ -38,9 +38,10 @@ try{
  await p.waitForTimeout(200);assert(await p.evaluate(()=>window.__workers.every(w=>w.terminated)));
  assert.equal(await p.locator('#cpu-value').innerText(),'—');assert.equal(await p.locator('#gpu-value').innerText(),'—');
  checks.push('熄火动作开始即停止 CPU/GPU、撤下数据，200ms 内全部计算 Worker 退出');
- await stage(p,'pour');await p.waitForTimeout(140);assert(Number(await p.locator('.water-stream').evaluate(n=>getComputedStyle(n).opacity))>.5);
- await stage(p,'rebel');await p.waitForTimeout(160);assert(Number(await p.locator('.stubborn-flame').evaluate(n=>getComputedStyle(n).opacity))>.5);
- await stage(p,'last-drop');await p.waitForTimeout(170);assert(Number(await p.locator('.last-drop').evaluate(n=>getComputedStyle(n).opacity))>.5);
+ await stage(p,'pour');await p.waitForTimeout(140);assert.equal(await p.locator('.shutdown-atmosphere').getAttribute('data-water'),'true');
+ await stage(p,'rebel');await p.waitForTimeout(160);assert.equal(await p.locator('.shutdown-atmosphere').getAttribute('data-flame'),'true');
+ assert(await p.locator('.shutdown-atmosphere').evaluate(canvas=>{const r=canvas.width/330,a=canvas.getContext('2d').getImageData(145*r,270*r,40*r,70*r).data;let hot=0;for(let i=0;i<a.length;i+=4)if(a[i]>a[i+1]+15&&a[i+1]>a[i+2]+10&&a[i+3]>12)hot++;return hot>10;}));
+ await stage(p,'last-drop');await p.waitForTimeout(170);assert.equal(await p.locator('.shutdown-atmosphere').getAttribute('data-drop'),'true');
  await idle(p);assert(Date.now()-start>=2500);
  assert.deepEqual(await p.evaluate(()=>window.__stages),['arrive','pour','rebel','last-drop','out']);
  assert.equal(await p.locator('.shutdown-scene').isVisible(),false);
@@ -52,10 +53,11 @@ try{
  checks.push('熄火途中可直接重新点火，迟到的动画/音效回调不会关闭新一轮运行');
  await p.evaluate(()=>window.dispatchEvent(new Event('pagehide')));await idle(p);await c.close();
 
- const retro=await setup();await retro.p.locator('button[data-skin=retro]').tap();await retro.p.locator('#cpu').uncheck();await retro.p.locator('#power').tap();await lit(retro.p);await retro.p.locator('#power').tap();await stage(retro.p,'rebel');await retro.p.waitForTimeout(150);
- assert(Number(await retro.p.locator('.stubborn-flame').evaluate(n=>getComputedStyle(n).opacity))>.5);
- assert.match(await retro.p.locator('.shutdown-action').evaluate(n=>getComputedStyle(n).transform),/-45/);
- await idle(retro.p);await retro.c.close();checks.push('暖炉皮肤也完成三段熄火，动作位置与炉芯对应');
+ const retro=await setup();await retro.p.locator('button[data-skin=retro]').tap();await retro.p.locator('#cpu').uncheck();await retro.p.locator('#power').tap();await lit(retro.p);const retroTones=await retro.p.evaluate(()=>window.__audio.reduce((n,c)=>n+c.__oscillators,0));await retro.p.locator('#power').tap();await stage(retro.p,'relight');await retro.p.waitForTimeout(150);
+ assert(Number(await retro.p.locator('.coils i').last().evaluate(n=>getComputedStyle(n,'::before').opacity))>.4);
+ assert.equal(await retro.p.locator('.shutdown-atmosphere').isVisible(),false); assert.equal(await retro.p.locator('.shutdown-scene').isVisible(),false);
+ assert(await retro.p.locator('.relay-knob').evaluate(n=>n.getAnimations().length>0));
+ await idle(retro.p);assert.equal(await retro.p.evaluate(()=>window.__audio.reduce((n,c)=>n+c.__oscillators,0)),retroTones);await retro.c.close();checks.push('电暖炉独立断电、单根电热丝回亮与旋钮再次关断；不显示水壶、水滴或蒸汽');
 
  const hidden=await setup();await hidden.p.locator('#cpu').uncheck();await hidden.p.locator('#power').tap();await lit(hidden.p);await hidden.p.locator('#power').tap();await stage(hidden.p,'pour');
  await hidden.p.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});document.dispatchEvent(new Event('visibilitychange'));});await idle(hidden.p);await hidden.p.waitForTimeout(120);
@@ -74,6 +76,6 @@ try{
 const wb=await webkit.launch({headless:true});
 try{
  const p=await wb.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});await p.goto(base);await p.locator('#cpu').uncheck();await p.locator('#power').tap();await lit(p);await p.locator('#power').tap();await stage(p,'rebel');await p.waitForTimeout(150);
- assert(Number(await p.locator('.stubborn-flame').evaluate(n=>getComputedStyle(n).opacity))>.5);await idle(p);checks.push('WebKit 手机视口完成实际弹跳与最后一滴熄火（非真机）');
+ assert.equal(await p.locator('.shutdown-atmosphere').getAttribute('data-flame'),'true');await idle(p);checks.push('WebKit 手机视口完成实际弹跳与最后一滴熄火（非真机）');
 }finally{await wb.close();}
 console.log(JSON.stringify({suite:'last-drop',passed:checks.length,checks},null,2));

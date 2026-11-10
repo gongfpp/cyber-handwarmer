@@ -57,15 +57,22 @@
 @media(min-width:701px) and (min-height:541px){.room{height:clamp(430px,calc(100svh - 390px),740px)}}
 @media(min-width:701px) and (min-height:541px) and (max-height:850px){.heater{transform:perspective(1400px) rotateY(var(--tilt-x,0deg)) scale(.78);transform-origin:center bottom}}
 .readout-label{display:inline-flex;align-items:baseline;gap:6px;white-space:nowrap}.compute-target{font:8px -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;color:#979d8d;letter-spacing:0}
-.shutdown-scene{position:absolute;inset:0;width:330px;height:510px;overflow:visible;pointer-events:none;z-index:6;display:none}
-#heater[data-ending=true] .shutdown-scene{display:block}
-.shutdown-scene .can-motion,.shutdown-scene .water-stream,.shutdown-scene .stubborn-flame,.shutdown-scene .steam,.shutdown-scene .splash,.shutdown-scene .last-drop{opacity:0;transform-box:view-box}
-.can-motion{transform-origin:260px 175px;filter:drop-shadow(0 3px 3px #1c281b33)}
-.water-stream{fill:none;stroke-linecap:round}.stubborn-flame{transform-origin:165px 333px;filter:drop-shadow(0 0 8px #ffb75566)}
-.splash{fill:none;stroke:#b9d7d1;stroke-width:2.5;stroke-linecap:round;transform-origin:165px 336px}
-.steam{fill:none;stroke:#d8ded2;stroke-width:5;stroke-linecap:round;filter:blur(.7px);transform-origin:165px 333px}.final-steam{stroke-width:6}
-.last-drop{transform-origin:0 0;filter:drop-shadow(0 2px 2px #40676d33)}
-#heater[data-ending=true] .flames,#heater[data-ending=true] .firelight,#heater[data-ending=true] .coils,#heater[data-ending=true] .reflector{transition:none}
+.shutdown-scene,.shutdown-atmosphere{position:absolute;inset:0;width:330px;height:510px;overflow:visible;pointer-events:none;display:none}
+.shutdown-scene{z-index:6}.shutdown-atmosphere{z-index:5}
+body[data-skin=nordic] #heater[data-ending=true] .shutdown-scene,body[data-skin=nordic] #heater[data-ending=true] .shutdown-atmosphere{display:block}
+.can-motion{opacity:0;transform-origin:260px 175px;transform-box:view-box;filter:drop-shadow(1px 4px 3px #10221855)}
+#heater[data-ending=true] .flames,#heater[data-ending=true] .firelight,#heater[data-ending=true] .reflector{transition:none}
 #heater[data-ending=true] .sparks{opacity:0;transition:none}
-body[data-skin=retro] .shutdown-action{transform:translateY(-45px)}
+.retro-relay{position:absolute;right:23px;bottom:17px;width:35px;height:35px;filter:drop-shadow(1px 2px 1px #55462d66);pointer-events:none}
+.relay-knob{transform-origin:18px 18px;transform-box:view-box;transform:rotate(-38deg);transition:transform .3s cubic-bezier(.4,0,.2,1)}
+#heater[data-on=true] .relay-knob{transform:rotate(38deg)}
+.retro-pilot{position:absolute;right:66px;bottom:31px;width:5px;height:5px;border-radius:50%;background:#bd7039;opacity:.12;box-shadow:0 0 5px #db8c44;transition:opacity .4s}
+#heater[data-on=true] .retro-pilot{opacity:.9}
+body[data-skin=retro] #heater[data-ending=true] .coils{opacity:1;transition:none}
+body[data-skin=retro] #heater[data-ending=true] .coils i:before{animation:coil-cooling 2.7s linear both;transition:none}
+body[data-skin=retro] #heater[data-ending=true] .coils i:last-child:before{animation-name:coil-relight}
+body[data-skin=retro] #heater[data-ending=true] .retro-pilot{animation:pilot-relight 2.7s linear both;transition:none}
+@keyframes coil-cooling{0%,12%{opacity:var(--coil-start,1)}27%{opacity:calc(var(--coil-start,1)*.35)}40%,100%{opacity:0}}
+@keyframes coil-relight{0%,12%{opacity:var(--coil-start,1)}27%{opacity:calc(var(--coil-start,1)*.35)}40%{opacity:0}49%{opacity:.85}56%{opacity:.55}64%{opacity:.75}76%,100%{opacity:0}}
+@keyframes pilot-relight{0%{opacity:.9}20%,40%{opacity:.1}49%,64%{opacity:.75}76%,100%{opacity:.12}}
 @media(max-width:360px){.readout-label{gap:4px}.compute-target{font-size:7px}.readout-heading{gap:4px}.compute-status{font-size:9px;gap:4px}}

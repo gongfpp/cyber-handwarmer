@@ -83,7 +83,7 @@ function stop(message = '', completed = false, immediate = false) {
   state.remaining = completed ? 0 : state.minutes * 60;
   render();
   if (animate) {
-    sound.extinguish();
+    sound.extinguish(state.skin);
     shutdown.play().then(finished => {
       if (finished && token === state.token && state.phase === 'ending') { state.phase = 'idle'; render(); }
     });

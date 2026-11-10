@@ -22,19 +22,41 @@
             </svg><div class="glass-shine"></div></div></div><div class="door-handle"></div><div class="air-vent"><i></i><i></i><i></i></div><div class="stove-mark">小暖</div></div>
           <div class="stove-base"><div class="stored-log log-a"></div><div class="stored-log log-b"></div><div class="stored-log log-c"></div></div><div class="stove-feet"><i></i><i></i></div>
         </div>
-        <div class="retro-heater" aria-hidden="true"><div class="retro-handle"></div><div class="retro-shell"><span class="retro-brand">小暖</span><div class="grill"><div class="reflector"></div><div class="coils"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="grill-mesh"></div></div><div class="retro-vents"></div></div><div class="retro-feet"><i></i><i></i></div></div>
+        <div class="retro-heater" aria-hidden="true"><div class="retro-handle"></div><div class="retro-shell"><span class="retro-brand">小暖</span><div class="grill"><div class="reflector"></div><div class="coils"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="grill-mesh"></div></div><div class="retro-vents"></div><div class="retro-pilot"></div><svg class="retro-relay" viewBox="0 0 36 36" aria-hidden="true"><defs><linearGradient id="relay-metal"><stop stop-color="#aa9c7d"/><stop offset=".5" stop-color="#f1e5c9"/><stop offset="1" stop-color="#8d7b5b"/></linearGradient><linearGradient id="relay-body" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#655841"/><stop offset=".35" stop-color="#3b3428"/><stop offset="1" stop-color="#181914"/></linearGradient></defs><circle cx="18" cy="18" r="17" fill="#8d7b5c"/><circle cx="18" cy="18" r="16" fill="url(#relay-metal)"/><circle cx="18" cy="18" r="14" fill="#302b21"/><g class="relay-knob"><circle cx="18" cy="18" r="12.5" fill="url(#relay-body)" stroke="#a49473" stroke-width=".6"/><path d="M9 15Q18 10 27 15L26 21Q18 25 10 21Z" fill="#64583f" stroke="#8d7c58" stroke-width=".5"/><path d="M18 7V11" stroke="#d8c9a2" stroke-width="1.6" stroke-linecap="round"/></g></svg></div><div class="retro-feet"><i></i><i></i></div></div>
 
+        <canvas class="shutdown-atmosphere" width="330" height="510" aria-hidden="true"></canvas>
         <svg class="shutdown-scene" viewBox="0 0 330 510" aria-hidden="true">
-          <defs><linearGradient id="shutdown-metal" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c4c9b3"/><stop offset=".5" stop-color="#98a78a"/><stop offset="1" stop-color="#687c67"/></linearGradient><linearGradient id="shutdown-fire" x1="0" y1="1" x2="0" y2="0"><stop stop-color="#fff1ad"/><stop offset=".5" stop-color="#ffbb59"/><stop offset="1" stop-color="#e56d35"/></linearGradient></defs>
-          <g class="shutdown-action">
-            <g class="first-steam steam"><path d="M146 322C134 311 157 305 147 293M164 324C181 311 151 305 166 288M182 322C194 311 176 305 185 297"/></g>
-            <g class="water-stream"><path d="M202 184Q187 217 179 264T165 332" stroke="#9fc9ca" stroke-width="7" stroke-dasharray="8 12"/><path d="M202 184Q187 217 179 264T165 332" stroke="#e0f3ed" stroke-width="2" stroke-dasharray="4 16"/></g>
-            <g class="first-splash splash"><path d="M143 327L133 321M151 335L138 337M175 326L183 317M182 335L195 333"/><ellipse cx="165" cy="336" rx="22" ry="4"/></g>
-            <g class="stubborn-flame"><path d="M165 336C132 338 135 317 148 303C154 296 155 285 151 278C170 286 172 297 168 304C179 300 180 293 178 289C197 307 195 336 165 336Z" fill="url(#shutdown-fire)"/><path d="M159 332C147 327 159 319 159 310C168 316 172 321 170 332Z" fill="#fff4c1"/><path d="M150 315L157 318M174 318L181 315" fill="none" stroke="#784124" stroke-width="2.2" stroke-linecap="round"/></g>
-            <g class="final-steam steam"><path d="M143 326C124 315 150 302 139 293M163 329C182 317 147 307 164 292M183 326C201 317 177 306 189 297"/></g>
-            <g class="can-motion"><path d="M291 153C325 133 328 183 299 184" fill="none" stroke="#81947a" stroke-width="8"/><path d="M239 164L214 146L201 151L235 183Z" fill="url(#shutdown-metal)" stroke="#71836c" stroke-width="1.5"/><ellipse cx="204" cy="150" rx="4" ry="7" fill="#546d60" transform="rotate(-48 204 150)"/><path d="M233 149Q264 139 296 149L302 186Q300 201 267 203Q233 203 228 190Z" fill="url(#shutdown-metal)" stroke="#70816b" stroke-width="1.5"/><ellipse cx="264" cy="149" rx="31" ry="8" fill="#d3d6c0" stroke="#87957c" stroke-width="2"/><ellipse cx="264" cy="149" rx="23" ry="4" fill="#859c8b"/><path d="M240 160L237 186" fill="none" stroke="#e2e2cc" stroke-width="3" stroke-linecap="round" opacity=".55"/><path d="M244 141Q255 117 275 140" fill="none" stroke="#a8b29a" stroke-width="5"/></g>
-            <g class="last-drop"><path d="M0-15C-2-9-10-2-10 4A10 10 0 0 0 10 4C10-2 2-9 0-15Z" fill="#a9d5d6" stroke="#e7f5ed" stroke-width="1.2"/><path d="M-4 2Q-7 7-2 10" fill="none" stroke="#f3fcf4" stroke-width="2" stroke-linecap="round"/></g>
-            <g class="final-splash splash"><path d="M143 329L132 320M151 337L136 340M176 327L184 316M181 336L197 332"/><ellipse cx="165" cy="336" rx="24" ry="4"/></g>
+          <defs>
+            <linearGradient id="vessel-body"><stop stop-color="#28372f"/><stop offset=".13" stop-color="#7b8e7d"/><stop offset=".30" stop-color="#bec5ad"/><stop offset=".49" stop-color="#899a83"/><stop offset=".75" stop-color="#435a48"/><stop offset=".94" stop-color="#657d62"/><stop offset="1" stop-color="#2b4235"/></linearGradient>
+            <linearGradient id="vessel-rim" x1="0" y1="0" x2=".2" y2="1"><stop stop-color="#ecedd4"/><stop offset=".28" stop-color="#a9b89d"/><stop offset=".65" stop-color="#506c56"/><stop offset="1" stop-color="#293e31"/></linearGradient>
+            <linearGradient id="vessel-spout" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#d2d9be"/><stop offset=".24" stop-color="#9eaf92"/><stop offset=".55" stop-color="#6b8469"/><stop offset=".85" stop-color="#314f3d"/><stop offset="1" stop-color="#1c3327"/></linearGradient>
+            <linearGradient id="vessel-handle"><stop stop-color="#243c2d"/><stop offset=".4" stop-color="#97aa8a"/><stop offset=".7" stop-color="#5d795c"/><stop offset="1" stop-color="#2a4430"/></linearGradient>
+            <radialGradient id="vessel-bounce" cx=".38" cy="1" r=".8"><stop stop-color="#f7b66b" stop-opacity=".42"/><stop offset=".5" stop-color="#c39a5a" stop-opacity=".1"/><stop offset="1" stop-color="#33442d" stop-opacity="0"/></radialGradient>
+            <clipPath id="vessel-clip"><path d="M233 149Q264 157 296 149L300 186Q301 201 266 204Q231 202 228 190Z"/></clipPath>
+          </defs>
+          <g class="can-motion">
+            <path d="M291 155C323 128 331 184 298 188" fill="none" stroke="#1f3327" stroke-width="10"/>
+            <path d="M291 154C321 131 327 183 298 185" fill="none" stroke="url(#vessel-handle)" stroke-width="6.5"/>
+            <path d="M299 150C312 146 317 153 318 163" fill="none" stroke="#d5dec0" stroke-width=".9" opacity=".62"/>
+            <path d="M240 166C228 166 220 161 211 146L201 151C211 172 223 181 238 185Z" fill="url(#vessel-spout)" stroke="#324f3a" stroke-width=".65"/>
+            <path d="M239 169C222 169 213 158 208 151" fill="none" stroke="#e2e5c9" stroke-width="1.1" opacity=".75"/>
+            <ellipse cx="204" cy="150" rx="4.6" ry="7" transform="rotate(-48 204 150)" fill="#c2d2b3"/>
+            <ellipse cx="204" cy="150" rx="2.9" ry="5.4" transform="rotate(-48 204 150)" fill="#20392e"/>
+            <ellipse cx="266" cy="192" rx="34" ry="11" fill="#1c3025"/>
+            <path d="M233 149Q264 157 296 149L300 186Q301 201 266 204Q231 202 228 190Z" fill="url(#vessel-body)" stroke="#334e37" stroke-width=".65"/>
+            <g clip-path="url(#vessel-clip)"><rect x="225" y="153" width="82" height="55" fill="url(#vessel-bounce)"/>
+              <path d="M243 155L239 194M246 156L243 197M249 156L247 199M252 157L250 200M256 158L255 201M260 159L260 202" stroke="#ebeed5" stroke-width=".45" opacity=".12"/>
+              <ellipse cx="247" cy="172" rx="8" ry="31" fill="#e0e6cb" opacity=".07"/>
+            </g>
+            <path d="M231 186Q263 205 299 187" fill="none" stroke="#c6ceb0" stroke-width=".75" opacity=".64"/>
+            <path d="M234 195Q264 208 295 196" fill="none" stroke="#182f22" stroke-width="1.2"/>
+            <ellipse cx="264" cy="149" rx="32" ry="10" fill="url(#vessel-rim)" stroke="#b7c3a2" stroke-width=".8"/>
+            <ellipse cx="264" cy="149" rx="27" ry="6.5" fill="#243e32"/>
+            <ellipse cx="264" cy="150" rx="24" ry="4.3" fill="#687f6a"/>
+            <path d="M237 145Q264 136 291 145" fill="none" stroke="#f0eed3" stroke-width=".8" opacity=".8"/>
+            <path d="M245 141Q253 119 275 140" fill="none" stroke="#243d2c" stroke-width="6"/>
+            <path d="M245 139Q255 119 275 138" fill="none" stroke="url(#vessel-rim)" stroke-width="3.8"/>
+            <circle cx="236" cy="170" r="1.6" fill="#a9b997"/><circle cx="294" cy="165" r="1.5" fill="#a9b997"/>
           </g>
         </svg>
       </div><div class="ground-glow" aria-hidden="true"></div>
