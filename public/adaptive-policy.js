@@ -2,7 +2,7 @@
 export const MODES = Object.freeze({
   gentle: { name: '轻柔', share: .25, duty: .40 },
   cozy: { name: '温暖', share: .65, duty: .82 },
-  toasty: { name: '热烈', share: 1, duty: .99 },
+  toasty: { name: '热烈', share: 1, duty: .85 },
 });
 export function deviceCapabilities(navigatorLike = navigator) {
   const reported = Number(navigatorLike.hardwareConcurrency);

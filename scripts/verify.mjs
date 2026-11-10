@@ -46,12 +46,13 @@ try {
   assert.equal(await page.evaluate(() => window.__pool.length), 0);
   await page.locator('button[data-mode=toasty]').click(); await page.locator('[data-minutes="3"]').click();
   assert.equal(await page.evaluate(() => window.__pool.length), 0);
-  checks.push('首次打开、预选档位和时间均不创建 CPU / GPU Worker');
+  assert.equal(await page.locator('#load-cap').innerText(), '上限 85%');
+  checks.push('首次打开、预选不创建 Worker，页面显示上限 85%');
   await page.locator('#power').click(); await lit();
-  await page.waitForFunction(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated && w.sent.some(m => m.duty >= .98)).length === 8);
+  await page.waitForFunction(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated && w.sent.some(m => m.duty >= .849)).length === 8);
   let workers = await liveCPU(); assert.equal(workers.length, 8);
   assert(workers.some(w => w.sent.some(m => m.type === 'benchmark')));
-  checks.push('8 核浏览器自动校准并升至 8 个 CPU Worker，目标工作比例 99%');
+  checks.push('8 核浏览器自动校准并升至 8 个 CPU Worker，目标工作比例 85%');
   await page.locator('button[data-mode=cozy]').click();
   await page.waitForFunction(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated && w.sent.some(m => m.duty >= .81)).length === 6);
   await page.locator('[data-minutes="5"]').click();
@@ -133,7 +134,7 @@ try {
       checks.push('GPU 硬件计时扩展返回实际计算耗时，用于自适应校准');
     }
     await real.locator('#cpu').check();
-    await real.waitForFunction(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated && w.sent.some(m => m.duty >= .98)).length === 8);
+    await real.waitForFunction(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated && w.sent.some(m => m.duty >= .849)).length === 8);
     const start = Date.now(); await real.locator('#power').click();
     await real.waitForFunction(() => window.__pool.every(w => w.terminated));
     assert(Date.now() - start < 1000);

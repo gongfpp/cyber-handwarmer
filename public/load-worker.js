@@ -60,7 +60,7 @@ onmessage = ({ data }) => {
   if (data.type === 'benchmark' && !active) { benchmark(); return; }
   if (data.type === 'heartbeat') { lastHeartbeat = performance.now(); return; }
   if (data.type === 'start' || data.type === 'update') {
-    duty = Math.max(0, Math.min(.99, Number(data.duty) || 0));
+    duty = Math.max(0, Math.min(.85, Number(data.duty) || 0));
     batchSize = Math.max(128, Math.min(8192, Number(data.batchSize) || 200));
     endAt = Math.min(Number(data.endAt) || now(), now() + 300000); lastHeartbeat = performance.now();
     if (!active && data.type === 'start') { queuedSlice = null; active = true; windowStart = performance.now(); task = setTimeout(cycle, data.offset || 0); }

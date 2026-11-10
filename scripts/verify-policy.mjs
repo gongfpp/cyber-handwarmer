@@ -12,11 +12,11 @@ assert.equal(deviceCapabilities({ hardwareConcurrency: 16, deviceMemory: 1 }).ca
 const profile = cpuProfile('toasty', device(8));
 let current = { count: profile.initialCount, duty: profile.initialDuty };
 for (let i = 0; i < 20; i++) current = adaptCPU(current, profile, { mainLagMs: 5, workerOverrunMs: 2 });
-assert.equal(current.count, 8); assert.equal(current.duty, .99);
+assert.equal(current.count, 8); assert.equal(current.duty, .85);
 const singleSpike = adaptCPU(current, profile, { mainLagMs: 150, workerOverrunMs: 200 });
 assert.equal(singleSpike.count, 8);
 const backedOff = adaptCPU(singleSpike, profile, { mainLagMs: 150, workerOverrunMs: 200 });
-assert.equal(backedOff.count, 7); assert(backedOff.duty < .99);
+assert.equal(backedOff.count, 7); assert(backedOff.duty < .85);
 const gentle = adaptCPU(current, cpuProfile('gentle', device(8)), { mainLagMs: 5, workerOverrunMs: 2 });
 assert.equal(gentle.count, 2); assert.equal(gentle.duty, .4);
 assert.equal(calibratedBatch(.01), 128); assert.equal(calibratedBatch(1e9), 8192);

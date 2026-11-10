@@ -2,7 +2,7 @@
 const profiles = {
   gentle: { duty: .35, steps: 96, maxSide: 768, targetMs: 8 },
   cozy: { duty: .75, steps: 192, maxSide: 1536, targetMs: 18 },
-  toasty: { duty: .99, steps: 384, maxSide: 2048, targetMs: 35 },
+  toasty: { duty: .85, steps: 384, maxSide: 2048, targetMs: 35 },
 };
 let gl, canvas, program, textures = [], framebuffers = [], sync = null;
 let active = false, task = null, endAt = 0, lastHeartbeat = 0;
