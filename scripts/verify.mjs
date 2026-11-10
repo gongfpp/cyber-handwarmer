@@ -7,6 +7,7 @@ const checks = [];
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
 context.setDefaultTimeout(10000);
+context.setDefaultNavigationTimeout(30000);
 const instrumentWorkers = () => {
   window.__pool = [];
   const NativeWorker = window.Worker;
