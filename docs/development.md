@@ -1,52 +1,56 @@
 # 开发说明
 
-小暖使用原生 HTML、CSS、JavaScript modules 和同源 Web Workers。运行与构建不需要第三方依赖。生产构建会给样式、脚本、Worker 和图标生成内容指纹，首页引用对应的版本；`asset-manifest.json` 用于核对产物和独立 Worker 检查。
+原生 HTML / CSS / JavaScript modules，无运行依赖。生产构建为样式、模块、Worker 和图标生成内容指纹，更新相互引用；`asset-manifest.json` 用于核对产物。
 
-## 目录
+## 页面
 
-- `public/index.html`：页面与使用手册。
-- `public/style.css`：暖炉造型与响应式布局。
-- `public/motion.css`：开关机炉光、选档滑块、数字变化与按钮动效。
-- `public/app.js`：交互、倒计时、页面生命周期与指针反馈。
-- `public/load-controller.js`：Worker 池、错误处理与心跳。
-- `public/load-worker.js`：有上限的实际算术计算。
-- `public/icon.svg`：项目图标。
-- `scripts/`：本地预览、构建与浏览器检查。
-- `docs/desktop.png`、`docs/mobile.png`：真实运行截图；界面修改后同步更新。
+北欧壁炉为默认皮肤，保留复古暖炉切换。主界面只显示皮肤、档位、倒计时、定时、CPU / GPU 和电源；说明与运行详情放在帮助面板。炉火使用 SVG / CSS，停止计算立即生效，视觉余晖可短暂淡出。支持减少动态效果。
 
-## 计算与停止
+## CPU
 
-| 档位 | 每个 Worker 的目标工作占空比 |
-| --- | --- |
-| 轻柔 | 12% |
-| 温暖 | 30% |
-| 热烈 | 55% |
+| 档位 | 每个线程的工作占空比 | 线程数上限 |
+| --- | --- | --- |
+| 轻柔 | 30% | 2 |
+| 温暖 | 65% | 4 |
+| 热烈 | 92% | 8 |
 
-线程数为 `max(1, min(2, hardwareConcurrency - 2))`；未知硬件并发数时使用 1 个。这些百分比是每 100ms 周期内的目标计算时长，不是整机 CPU 使用率，实际值受浏览器调度影响。每次 Worker 忙等切片约不超过 8ms，主线程不执行忙等。
+实际线程数为 `max(1, min(档位上限, hardwareConcurrency - 2))`。例如浏览器报告 8 个逻辑处理器时，三档分别使用 2、4、6 个线程；未知并发数按 4 处理。百分比是目标计算工作时长，**不代表整机 CPU 使用率**。
 
-主页面每 250ms 发送心跳；页面隐藏、失去窗口焦点、离开、冻结或计时结束时直接终止全部 Worker。Worker 自身也检查单调时钟截止时间，超过约 1.4 秒没有心跳会自行关闭。系统冻结时可能暂停所有执行，恢复后再检查。
+每个 Worker 每 100ms 周期执行目标工作时长，单片约不超过 8ms，使用 MessageChannel 让出事件循环，避免嵌套计时器的最小间隔压低高档负载。主线程不忙等；切换档位时调整线程数并保持原截止时间。
 
-最长可选定时为 5 分钟。用户主动修改定时会重新计时；改档保留剩余时间。仅看炉火模式不启动 Worker。停止计算立即生效，炉光淡出只是短暂的视觉动效。
+## GPU
 
-## 动效与交互
+独立 Worker 内创建 OffscreenCanvas + WebGL2，优先请求高性能 GPU。片段着色器反复执行数学计算，并在两张 RGBA8 纹理间交替读写。每次只提交一个批次，使用 `fenceSync` / `clientWaitSync` 非阻塞检查完成，再提交下一批，避免积压命令。
 
-炉芯使用伪元素透明度完成逐根亮起与关机淡出，避免依赖不可插值的背景渐变。档位选中块通过 transform 滑动，数字只在变化时触发短动画；进度条按时间持续更新。桌面指针倾斜限制在很小的角度，触屏和减少动态效果模式均不启用。
+| 档位 | 调度目标 | 着色器迭代 | 分辨率上限 |
+| --- | --- | --- | --- |
+| 轻柔 | 35% | 96 | 768² |
+| 温暖 | 65% | 192 | 1280² |
+| 热烈 | 90% | 384 | 2048² |
 
-所有动效使用本地 CSS，没有额外 GPU 负载循环、声音、图片、字体或第三方动画库。负载启动和停止不依赖动画完成。
+从 512² 开始，按已完成批次的耗时调整分辨率，每秒不超过 60 批；调度目标与批次等待时间均不是实测 GPU 利用率。最多两张 2048² RGBA8 工作纹理，约 32MiB，不含浏览器与驱动开销。
 
-## 检查
+检测到 SwiftShader、llvmpipe 等已知软件渲染器时拒绝 GPU 加热。浏览器或驱动未暴露渲染器详情时，以 WebGL2 的能力与性能限制为准；网页无法控制操作系统选择哪块独立或集成显卡。
 
-可选安装 Playwright 来复现浏览器检查；它不是网站运行依赖。
+GPU 关闭默认不创建上下文；主动开启时才初始化。GPU 不可用时取消 GPU 选中并提示，CPU 可继续。CPU 与 GPU 均未选中时只播放炉火。
+
+## 生命周期
+
+CPU 与 GPU 分别每 250ms 接收心跳，独立检查单调时钟截止时间；约 1.4 秒没有心跳会自行退出。页面隐藏、失去焦点、离开、冻结或到点时停止，返回不自动启动。系统冻结期间浏览器可能暂停全部执行，恢复后再检查。
+
+CPU 直接终止 Worker。GPU 先发送停止消息以释放 GL 上下文，最多等待 80ms 后强制终止；已提交的单个 GPU 批次可能由驱动完成，不再提交后续批次。最长可选时间 5 分钟，用户可主动修改并重新计时。
+
+## 验证
 
 ```sh
 npm install --no-save --package-lock=false playwright
 npx playwright install chromium webkit
 npm run build
 npm run preview
-# 另开一个终端
+# 另一个终端
 npm run verify
 ```
 
-使用 `TEST_URL` 指定目标地址，或使用 `PLAYWRIGHT_MODULE` 指向已有 Playwright。
+`TEST_URL` 可指定目标地址，`PLAYWRIGHT_MODULE` 可指定已有 Playwright 安装。macOS 可通过 `TEST_GPU_BACKEND=metal` 验证实际 Metal GPU；默认软件环境只验证 GPU 不可用路径，不能当作硬件 GPU 验收。
 
-检查覆盖默认不运行、真实 Worker 启停、档位和定时切换、模拟页面隐藏与离开、到点停止、独立 Worker 心跳失效、加载失败、快速取消启动、七种视口宽度与 WebKit 基本启停。真实手机锁屏、整机 CPU、电池消耗和机身温度仍需实机检查。
+参考：[OffscreenCanvas](https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvas)、[WebGLSync](https://developer.mozilla.org/en-US/docs/Web/API/WebGLSync)、[WebGL 实践](https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices)。

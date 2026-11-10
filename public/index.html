@@ -2,50 +2,36 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f3eee4"><meta name="description" content="一台放在浏览器里的复古暖手炉。三档可调、限时运行，也可以只看炉火，享受一点冬日暖意。">
-  <title>小暖 · 赛博暖手宝</title><link rel="icon" href="./icon.svg" type="image/svg+xml"><link rel="stylesheet" href="./style.css"><link rel="stylesheet" href="./motion.css"><script type="module" src="./app.js"></script>
+  <meta name="theme-color" content="#e9e7e0"><meta name="description" content="小暖，一座浏览器里的壁炉。">
+  <title>小暖 · 壁炉</title><link rel="icon" href="./icon.svg" type="image/svg+xml"><link rel="stylesheet" href="./style.css"><script type="module" src="./app.js"></script>
 </head>
-<body>
-  <header class="site-header">
-    <a class="brand" href="./" aria-label="小暖首页"><img src="./icon.svg" width="34" height="34" alt="小暖暖炉图标"><span>小暖<span class="brand-en">A LITTLE WARMTH</span></span></a>
-    <div class="header-right"><span class="edition">冬日桌面计划 · No. 001</span><button class="manual-link" id="open-manual">使用手册 <span aria-hidden="true">↗</span></button></div>
-  </header>
+<body data-skin="nordic">
+  <header class="site-header"><a class="brand" href="./" aria-label="小暖首页"><img src="./icon.svg" alt="小暖" width="28" height="28">小暖</a><div class="header-actions"><div class="skins" aria-label="展示皮肤"><button data-skin="nordic" aria-pressed="true">壁炉</button><button data-skin="retro" aria-pressed="false">暖炉</button></div><button id="open-manual" class="icon-button help-button" aria-label="使用说明">?</button></div></header>
   <main>
-    <section class="studio" aria-labelledby="hero-title">
-      <div class="intro">
-        <div class="eyebrow"><span class="sun-mark" aria-hidden="true">✳</span> YOUR LITTLE WINTER COMPANION</div>
-        <h1 id="hero-title">把冬天，<br>调暖<span class="italic">一点</span>。<span class="title-dot"></span></h1>
-        <p class="intro-copy">给冰凉的指尖，留一小片暖意。<br>一台藏在浏览器里的复古暖手炉，<br>陪你把眼前的日子，慢慢过暖。</p>
-        <div class="hand-note"><svg width="53" height="36" viewBox="0 0 53 36" aria-hidden="true"><path d="M3 5C17 0 20 26 47 23M38 15l11 9-13 7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>按下电源，暖一小会儿</span></div>
-        <div class="session-note"><span class="note-icon" aria-hidden="true">◷</span><div><strong id="session-heading">一点温暖，刚刚好</strong><p id="session-copy">默认 1 分钟，到点自动关机。</p></div></div>
-      </div>
-      <div class="product-stage">
-        <div class="ambient" aria-hidden="true"></div><div class="stage-orbit" aria-hidden="true"></div>
-        <div class="product-tag" aria-hidden="true"><span>DESIGNED FOR</span><strong>慢下来的时刻</strong><i>since this winter</i></div>
-        <div class="heater" id="heater" data-mode="gentle" data-on="false">
-          <div class="carry-handle" aria-hidden="true"></div>
-          <div class="heater-shell">
-            <div class="device-header"><div class="device-wordmark">小暖 <span>WARM—01</span></div><div class="device-status"><span id="status-led"></span><span id="device-state">待机中</span></div></div>
-            <div class="grill" aria-hidden="true"><div class="reflector"></div><div class="coils"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="heat-haze"><i></i><i></i><i></i></div><div class="grill-mesh"></div><div class="grill-rail top"></div><div class="grill-rail bottom"></div><div class="grill-badge">LITTLE WARMTH</div></div>
-            <div class="display" role="timer" aria-label="剩余时间"><div class="display-left"><span class="display-label" id="display-label">READY WHEN YOU ARE</span><div class="digits" id="countdown">01<span>:</span>00</div></div><div class="display-right"><span class="heat-waves" aria-hidden="true">≋</span><strong id="display-mode">轻柔</strong><span id="display-kind">计算待机</span></div><div class="progress-track"><i id="progress"></i></div></div>
-            <fieldset class="control-field modes"><legend>暖意档位 <span>WARMTH</span></legend><div class="segmented" id="modes"><button type="button" data-mode="gentle" aria-pressed="true"><span aria-hidden="true">Ⅰ</span>轻柔</button><button type="button" data-mode="cozy" aria-pressed="false"><span aria-hidden="true">Ⅱ</span>温暖</button><button type="button" data-mode="toasty" aria-pressed="false"><span aria-hidden="true">Ⅲ</span>热烈</button></div></fieldset>
-            <div class="bottom-controls"><fieldset class="control-field timer"><legend>定时休息 <span>MINUTES</span></legend><div class="time-buttons" id="durations"><button type="button" data-minutes="1" aria-pressed="true">1<span>分</span></button><button type="button" data-minutes="3" aria-pressed="false">3<span>分</span></button><button type="button" data-minutes="5" aria-pressed="false">5<span>分</span></button></div></fieldset><button class="power-button" id="power" aria-label="开启暖手" aria-pressed="false"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M6.4 5.9a8 8 0 1 0 11.2 0" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" fill="none"/></svg><span id="power-label">开启暖手</span></button></div>
-            <div class="device-footer"><span>给自己一点暖意</span><span>INPUT: A LITTLE PAUSE</span></div>
-          </div><div class="feet" aria-hidden="true"><i></i><i></i></div>
+    <section class="room" aria-label="暖炉展示">
+      <div class="window-light" aria-hidden="true"></div><div class="floor" aria-hidden="true"></div>
+      <div id="heater" class="heater" data-on="false" data-mode="gentle">
+        <div class="fireplace" aria-hidden="true">
+          <div class="chimney"></div><div class="stove-top"></div>
+          <div class="stove-body"><div class="door-frame"><div class="firebox"><div class="firelight"></div>
+            <svg class="fire" viewBox="0 0 300 310" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="flame" x1="0" y1="1" x2=".1" y2="0"><stop stop-color="#fff3ba"/><stop offset=".3" stop-color="#ffd16f"/><stop offset=".65" stop-color="#ec7930"/><stop offset="1" stop-color="#d54a1c" stop-opacity=".15"/></linearGradient><linearGradient id="hot" x1="0" y1="1" x2="0" y2="0"><stop stop-color="#fff5c8"/><stop offset=".55" stop-color="#ffbf5b"/><stop offset="1" stop-color="#fb9d3b" stop-opacity=".25"/></linearGradient><radialGradient id="ember"><stop stop-color="#ffb353"/><stop offset="1" stop-color="#ad3820" stop-opacity="0"/></radialGradient></defs>
+              <ellipse cx="150" cy="273" rx="125" ry="28" fill="url(#ember)"/>
+              <g class="flames"><path class="tongue t1" fill="url(#flame)" d="M44 270C9 233 62 196 47 154C81 169 67 202 83 212C105 176 78 135 110 100C105 155 147 169 127 218C113 266 99 284 44 270Z"/><path class="tongue t2" fill="url(#flame)" d="M100 278C58 232 132 182 113 141C143 170 153 128 139 77C184 107 145 149 175 170C182 132 216 109 202 62C247 126 188 171 220 210C244 255 199 292 100 278Z"/><path class="tongue t3" fill="url(#flame)" d="M187 274C166 232 230 204 224 167C238 193 259 164 254 136C291 175 250 205 265 232C279 264 234 285 187 274Z"/><path class="tongue t4" fill="url(#hot)" d="M91 278C68 246 122 216 113 183C147 215 121 225 141 242C152 204 183 204 175 160C210 191 176 226 201 245C224 281 130 298 91 278Z"/><path class="tongue t5" fill="url(#hot)" d="M156 284C130 253 174 241 167 215C201 232 182 253 205 269C217 286 183 291 156 284Z"/></g>
+              <g class="logs"><g transform="rotate(-13 145 270)"><rect x="40" y="252" width="208" height="31" rx="14" fill="#38261e"/><path d="M58 259L228 260M70 271L223 276M91 256L99 282M174 254L183 280" stroke="#7d4a2e" stroke-width="3"/><ellipse cx="241" cy="267" rx="15" ry="16" fill="#785039"/><ellipse cx="241" cy="267" rx="8" ry="10" fill="none" stroke="#442f22" stroke-width="2"/></g><g transform="rotate(15 150 280)"><rect x="68" y="266" width="168" height="26" rx="12" fill="#241e19"/><path d="M82 274L218 274M104 286L204 285M151 268L156 288" stroke="#62412b" stroke-width="3"/></g></g>
+              <g class="sparks" fill="#ffd989"><circle class="spark s1" cx="103" cy="190" r="1.5"/><circle class="spark s2" cx="187" cy="215" r="1"/><circle class="spark s3" cx="152" cy="162" r="1.3"/></g>
+            </svg><div class="glass-shine"></div></div></div><div class="door-handle"></div><div class="air-vent"><i></i><i></i><i></i></div><div class="stove-mark">小暖</div></div>
+          <div class="stove-base"><div class="stored-log log-a"></div><div class="stored-log log-b"></div><div class="stored-log log-c"></div></div><div class="stove-feet"><i></i><i></i></div>
         </div>
-        <div class="surface-shadow" aria-hidden="true"></div><span class="stage-caption">一小炉光 · 一小段自己的时间</span>
-      </div>
+        <div class="retro-heater" aria-hidden="true"><div class="retro-handle"></div><div class="retro-shell"><span class="retro-brand">小暖</span><div class="grill"><div class="reflector"></div><div class="coils"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="grill-mesh"></div></div><div class="retro-vents"></div></div><div class="retro-feet"><i></i><i></i></div></div>
+      </div><div class="ground-glow" aria-hidden="true"></div>
     </section>
-    <section class="utility-bar" aria-label="运行设置与状态">
-      <label class="demo-toggle"><input type="checkbox" id="demo"><span class="switch" aria-hidden="true"></span><span><strong>仅看炉火</strong><span class="setting-subtitle">不产生计算负载</span></span></label>
-      <div class="load-info"><span class="small-sun" aria-hidden="true">✳</span><div><strong id="load-title">轻柔 · 轻量计算</strong><span id="load-description">轻量运行，到点自动休息</span></div></div>
-      <button id="stop" class="stop-button" disabled><span aria-hidden="true">■</span> 停止运行</button>
+    <section class="controls" aria-label="壁炉控制">
+      <div class="control-main"><button id="power" class="power" aria-label="点火" aria-pressed="false"><svg class="power-symbol" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M6.4 5.9a8 8 0 1 0 11.2 0"/></svg><svg class="stop-symbol" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button><div id="modes" class="modes" aria-label="暖意档位"><button data-mode="gentle" aria-pressed="true">轻柔</button><button data-mode="cozy" aria-pressed="false">温暖</button><button data-mode="toasty" aria-pressed="false">热烈</button></div><div class="timer-readout"><span id="state-dot" class="state-dot"></span><div role="timer" aria-label="剩余时间" id="countdown">01:00</div></div></div>
+      <div class="control-settings"><div id="durations" class="durations" aria-label="定时"><button data-minutes="1" aria-pressed="true" aria-label="1 分钟">1′</button><button data-minutes="3" aria-pressed="false" aria-label="3 分钟">3′</button><button data-minutes="5" aria-pressed="false" aria-label="5 分钟">5′</button></div><div class="sources" aria-label="计算设备"><label class="source"><input type="checkbox" id="cpu" checked><span><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="4" width="12" height="12" rx="2"/><path d="M7 1v3m6-3v3M7 16v3m6-3v3M1 7h3m-3 6h3m12-6h3m-3 6h3"/></svg>CPU<i></i></span></label><label class="source"><input type="checkbox" id="gpu"><span><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="5" width="16" height="10" rx="2"/><circle cx="10" cy="10" r="3"/><path d="M5 15v3m4-3v3"/></svg>GPU<i></i></span></label></div></div>
     </section>
-    <div class="feedback" role="status" aria-live="polite" aria-atomic="true"><span class="feedback-dot" aria-hidden="true"></span><span id="feedback-text">还没开机。选好档位，按下电源就好。</span></div>
-    <section class="little-notes" aria-label="使用提示"><p><span>01</span><strong>由你开启</strong>只有按下电源，才会开始计算。</p><p><span>02</span><strong>离开就休息</strong>切换标签或应用后自动停止。</p><p><span>03</span><strong>暖意因机而异</strong>显示的是时间，设备温度无法读取。</p></section>
+    <div id="feedback" class="feedback" role="status" aria-live="polite" aria-atomic="true"><span id="feedback-text"></span></div>
   </main>
-  <footer class="site-footer"><span>小暖 © 2026 <i>愿你的冬天，有一点点暖。</i></span><span>灵感来自 <a href="https://ac.yunyoujun.cn/" target="_blank" rel="noopener noreferrer">云游君的便携小空调 ↗</a></span></footer>
-  <dialog id="manual" aria-labelledby="manual-title"><button class="close-dialog" id="close-manual" aria-label="关闭使用手册">×</button><span class="eyebrow">A LITTLE OWNER’S MANUAL</span><h2 id="manual-title">小暖的使用手册</h2><p>这是一台有真实计算负载的「赛博暖手宝」。它会增加设备耗电，实际是否变暖取决于设备与散热；网页不能读取真实温度。</p><ol><li><strong>选档、选时间，再按电源。</strong>轻柔、温暖、热烈对应 12%、30%、55% 的单线程工作占空比，最多使用 2 个 Worker，不代表整机 CPU 使用率。</li><li><strong>想放空，就「仅看炉火」。</strong>只播放轻量的视觉动效，不启动计算 Worker。切换模式会先停止，需重新按电源。</li><li><strong>离开、到点，都收工。</strong>隐藏页面、切换应用、离开页面或倒计时结束会停止计算，回来后不会自动重启。运行时更改定时会从新时长重新计时。</li></ol><p class="manual-note">设备明显发烫或出现不适时，请立即停止。不要遮挡散热口，也不要以它替代正规的取暖设备。</p><button class="manual-done" id="manual-done">知道了，暖一会儿</button></dialog>
-  <noscript><div class="noscript">请启用 JavaScript 后使用暖手炉；当前没有产生计算负载。</div></noscript>
+  <dialog id="manual" aria-labelledby="manual-title"><button id="close-manual" class="close-dialog" aria-label="关闭使用说明">×</button><h2 id="manual-title">使用说明</h2><p>选择档位和时间，按电源开启。再次按电源停止。CPU、GPU 均关闭时只展示炉火。</p><p>GPU 使用 WebGL2，需要浏览器开启硬件加速；不支持时会提示，不会用软件计算冒充 GPU。</p><dl class="details"><div><dt>CPU</dt><dd id="cpu-detail"></dd></div><div><dt>GPU</dt><dd id="gpu-detail">未开启</dd></div></dl><p>档位调整不改变剩余时间，修改定时会重新计时。切换后台、失去窗口焦点或到点都会停止，返回后不会自动开启。</p><p>计算会增加耗电，实际发热取决于设备和散热。显示的是剩余时间，网页无法读取设备温度。设备明显发烫或不适时请停止，不要遮挡散热口。</p></dialog>
+  <noscript><p class="noscript">请启用 JavaScript。</p></noscript>
 </body>
 </html>

@@ -1,11 +1,15 @@
 /* No network, no persistent storage. This Worker performs bounded arithmetic. */
 let duty = 0, endAt = 0, lastHeartbeat = 0, task = null, active = false;
 let accumulator = 0.123;
+const channel = new MessageChannel();
+let queuedSlice = null;
+channel.port1.onmessage = () => { const next = queuedSlice; queuedSlice = null; next?.(); };
+
 const now = () => performance.timeOrigin + performance.now();
-const clampDuty = value => Math.max(0, Math.min(0.55, Number(value) || 0));
+const clampDuty = value => Math.max(0, Math.min(0.92, Number(value) || 0));
 function shutDown(reason) {
   active = false;
-  clearTimeout(task);
+  clearTimeout(task); queuedSlice = null; channel.port1.close(); channel.port2.close();
   postMessage({ type: 'stopped', reason });
   close();
 }
@@ -28,7 +32,7 @@ function cycle() {
       for (let i = 0; i < 200; i++) accumulator = Math.sin(accumulator + i) * Math.cos(i + accumulator) + 0.5;
     }
     remaining -= performance.now() - begin;
-    if (remaining > 0.2) task = setTimeout(slice, 0);
+    if (remaining > 0.2) { queuedSlice = slice; channel.port2.postMessage(0); }
     else task = setTimeout(cycle, Math.max(0, 100 - (performance.now() - cycleStart)));
   }
   slice();

@@ -18,9 +18,10 @@ async function asset(name, dependencies = []) {
 // Resolve the module graph from the Worker upward so every import is versioned.
 await asset('load-worker.js');
 await asset('load-controller.js', ['load-worker.js']);
-await asset('app.js', ['load-controller.js']);
+await asset('gpu-worker.js');
+await asset('gpu-controller.js', ['gpu-worker.js', 'load-controller.js']);
+await asset('app.js', ['load-controller.js', 'gpu-controller.js']);
 await asset('style.css');
-await asset('motion.css');
 await asset('icon.svg');
 let html = await readFile(`${root}public/index.html`, 'utf8');
 for (const [name, filename] of Object.entries(manifest)) html = html.replaceAll(`./${name}`, `./${filename}`);

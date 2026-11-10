@@ -2,155 +2,179 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { chromium, webkit } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
-const base = process.env.TEST_URL || 'http://127.0.0.1:4173';
+const base = (process.env.TEST_URL || 'http://127.0.0.1:4173').replace(/\/?$/, '/');
 const checks = [];
-const browser = await chromium.launch({ headless: true });
-const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
-context.setDefaultTimeout(10000);
-context.setDefaultNavigationTimeout(30000);
-const instrumentWorkers = () => {
+const args = process.env.TEST_GPU_BACKEND === 'metal' ? ['--use-angle=metal'] : [];
+const browser = await chromium.launch({ headless: true, args });
+async function instrument() {
+  Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
   window.__pool = [];
   const NativeWorker = window.Worker;
   window.Worker = class extends NativeWorker {
-    constructor(...args) {
-      super(...args);
-      const record = { terminated: false, messages: [] };
-      window.__pool.push(record); this.record = record;
+    constructor(url, ...rest) {
+      super(url, ...rest);
+      const entry = { url: String(url), terminated: false, sent: [], received: [] };
+      window.__pool.push(entry); this.entry = entry;
+      this.addEventListener('message', event => entry.received.push(event.data));
     }
-    postMessage(data) { this.record.messages.push(data); return super.postMessage(data); }
-    terminate() { this.record.terminated = true; return super.terminate(); }
+    postMessage(data) { this.entry.sent.push(data); return super.postMessage(data); }
+    terminate() { this.entry.terminated = true; return super.terminate(); }
   };
-};
-await context.addInitScript(instrumentWorkers);
-const manifestResponse = await context.request.get(new URL('asset-manifest.json', base.endsWith('/') ? base : base + '/').href);
-const workerPath = manifestResponse.ok() ? (await manifestResponse.json())['load-worker.js'] : 'load-worker.js';
+}
+async function contextFor(target = browser) {
+  const context = await target.newContext({ viewport: { width: 1440, height: 1050 } });
+  context.setDefaultTimeout(12000); context.setDefaultNavigationTimeout(30000);
+  await context.addInitScript(instrument); return context;
+}
+const context = await contextFor();
+const manifestResponse = await context.request.get(new URL('asset-manifest.json', base).href);
+const manifest = manifestResponse.ok() ? await manifestResponse.json() : {};
 const page = await context.newPage();
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
-const on = () => page.locator('#heater').getAttribute('data-on');
-const pool = () => page.evaluate(() => window.__pool);
-const off = async () => { await page.waitForFunction(() => document.querySelector('#heater').dataset.on === 'false'); assert((await pool()).every(w => w.terminated)); };
+const liveCPU = () => page.evaluate(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated));
+async function lit() { await page.waitForFunction(() => document.querySelector('#heater').dataset.on === 'true'); }
+async function off() {
+  await page.waitForFunction(() => document.querySelector('#heater').dataset.on === 'false');
+  await page.waitForTimeout(160);
+  assert(await page.evaluate(() => window.__pool.every(w => w.terminated)));
+}
 try {
   await page.goto(base);
-  assert.equal(await on(), 'false'); assert.equal((await pool()).length, 0);
-  await page.locator('button[data-mode=toasty]').click();
-  await page.locator('[data-minutes="3"]').click();
-  assert.equal((await pool()).length, 0); checks.push('初始与预选档位均不创建 Worker');
-  await page.locator('#power').click();
-  await page.waitForFunction(() => document.querySelector('#heater').dataset.on === 'true');
-  let workers = await pool(); assert(workers.length >= 1 && workers.length <= 2);
-  assert(workers.every(w => w.messages.some(m => m.type === 'start' && m.duty === .55)));
-  assert.match(await page.locator('#countdown').innerText(), /0[23]:[0-5][0-9]/);
-  checks.push('主动启动真实 Worker，热烈档 55%，最多两个线程');
+  assert.equal(await page.locator('#heater').getAttribute('data-on'), 'false');
+  assert.equal(await page.evaluate(() => window.__pool.length), 0);
+  await page.locator('button[data-mode=toasty]').click(); await page.locator('[data-minutes="3"]').click();
+  assert.equal(await page.evaluate(() => window.__pool.length), 0);
+  checks.push('首次打开、预选档位和时间均不创建 CPU / GPU Worker');
+  await page.locator('#power').click(); await lit();
+  let workers = await liveCPU(); assert.equal(workers.length, 6);
+  assert(workers.every(w => w.sent.some(m => m.type === 'start' && m.duty === .92)));
+  checks.push('8 核浏览器热烈档：6 个真实 CPU Worker，目标工作占空比 92%');
   await page.locator('button[data-mode=cozy]').click();
-  assert((await pool()).every(w => w.messages.some(m => m.type === 'update' && m.duty === .30)));
+  await page.waitForFunction(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated && w.sent.some(m => m.type === 'start' && m.duty === .65)).length === 4);
   await page.locator('[data-minutes="5"]').click();
-  assert.match(await page.locator('#countdown').innerText(), /05:00/);
-  assert.match(await page.locator('#feedback-text').innerText(), /重新计时/);
+  assert.equal(await page.locator('#countdown').textContent(), '05:00');
   await page.locator('button[data-mode=gentle]').click();
-  assert((await pool()).every(w => w.messages.some(m => m.type === 'update' && m.duty === .12)));
-  checks.push('运行中三档切换与 3→5 分钟重新计时');
-  await page.locator('#stop').click(); await off(); checks.push('停止按钮终止全部真实 Worker');
-  await page.locator('#power').click(); await page.waitForFunction(() => document.querySelector('#heater').dataset.on === 'true');
-  await page.locator('#demo').check(); await off();
-  const before = (await pool()).length;
-  await page.locator('#power').click(); await page.waitForFunction(() => document.querySelector('#heater').dataset.on === 'true');
-  assert.equal((await pool()).length, before); checks.push('切换演示先释放负载，演示启动不创建 Worker');
-  await page.evaluate(() => {
-    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
-    document.dispatchEvent(new Event('visibilitychange'));
-  }); await off();
-  await page.evaluate(() => { delete document.hidden; document.dispatchEvent(new Event('visibilitychange')); });
-  assert.equal(await on(), 'false'); checks.push('页面隐藏事件停止，恢复可见不自动重启');
-  await page.locator('#demo').uncheck();
-  await page.locator('#power').click(); await page.waitForFunction(() => document.querySelector('#heater').dataset.on === 'true');
-  await page.evaluate(() => window.dispatchEvent(new Event('pagehide'))); await off(); checks.push('离开页面事件终止 Worker');
-  await page.locator('#power').click(); await page.waitForFunction(() => document.querySelector('#heater').dataset.on === 'true');
-  await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await off(); checks.push('窗口失去焦点事件终止 Worker');
-  // Fast-forward only the window clock; real Workers remain bounded and are terminated by the controller.
-  await page.clock.install();
-  await page.locator('[data-minutes="1"]').click();
-  await page.locator('#power').click(); await page.waitForFunction(() => document.querySelector('#heater').dataset.on === 'true');
+  await page.waitForFunction(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated && w.sent.some(m => m.type === 'start' && m.duty === .30)).length === 2);
+  checks.push('运行中档位改变线程数，修改定时重新计时');
+  await page.locator('#power').click(); await off(); checks.push('停止释放全部计算线程');
+  await page.locator('#cpu').uncheck();
+  const before = await page.evaluate(() => window.__pool.length);
+  await page.locator('#power').click(); await lit();
+  assert.equal(await page.evaluate(() => window.__pool.length), before);
+  checks.push('CPU / GPU 均关闭时只显示炉火，无计算 Worker');
+  for (const skin of ['nordic', 'retro']) {
+    await page.locator(`button[data-skin=${skin}]`).click();
+    for (const width of [320, 375, 390, 768, 1024, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${skin} overflow at ${width}`);
+    }
+  }
+  checks.push('两种皮肤在七种开机视口宽度均无横向溢出');
+  await page.locator('#power').click(); await off();
+  const visibleText = await page.locator('body').innerText();
+  for (const banned of ['灵感来自', '云游君', '由你开启', '离开就休息', '暖意因机而异', '工作占空比', '不产生计算负载']) assert(!visibleText.includes(banned));
+  checks.push('主界面无来源页脚、说明条、提示卡和持续运行说明');
+  await page.locator('#cpu').check(); await page.locator('#power').click(); await lit();
+  await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange')); });
+  await off(); await page.evaluate(() => { delete document.hidden; document.dispatchEvent(new Event('visibilitychange')); });
+  assert.equal(await page.locator('#heater').getAttribute('data-on'), 'false');
+  checks.push('隐藏页面停止，返回不自动重启');
+  for (const event of ['blur', 'pagehide']) {
+    await page.locator('#power').click(); await lit();
+    await page.evaluate(event => window.dispatchEvent(new Event(event)), event); await off();
+  }
+  checks.push('失去窗口焦点和离开页面均终止计算');
+  await page.locator('#open-manual').click(); assert(await page.locator('#manual').isVisible());
+  await page.keyboard.press('Escape'); assert(!(await page.locator('#manual').isVisible()));
+  checks.push('帮助面板可用并支持 Escape');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.locator('#cpu').uncheck(); await page.locator('#power').click(); await lit();
+  assert.equal(await page.locator('.tongue').first().evaluate(el => getComputedStyle(el).animationName), 'none');
+  await page.locator('#power').click(); await off(); await page.emulateMedia({ reducedMotion: 'no-preference' });
+  checks.push('系统减少动态效果时取消炉火动画');
+  await page.locator('[data-minutes="1"]').click(); await page.clock.install();
+  await page.locator('#cpu').check(); await page.locator('#power').click(); await lit();
+  await page.clock.fastForward(61000); await off(); assert.equal(await page.locator('#countdown').textContent(), '00:00');
+  await page.locator('#cpu').uncheck(); await page.locator('#power').click(); await lit();
   await page.clock.fastForward(61000); await off();
-  assert.equal(await page.locator('#countdown').innerText(), '00:00'); checks.push('真实计算模式计时结束释放 Worker（窗口时钟加速）');
-  await page.locator('#demo').check(); await page.locator('#power').click();
-  await page.clock.fastForward(61000); await off(); checks.push('炉火演示到点关闭');
-  await page.clock.resume();
-  // Test the Worker itself without app lifecycle assistance.
-  const independentContext = await browser.newContext();
-  const independentPage = await independentContext.newPage();
-  await independentPage.goto(base);
-  const independent = await independentPage.evaluate(async workerPath => {
+  checks.push('计算和纯炉火两种模式到期关闭（窗口时钟加速）');
+  const realContext = await contextFor(); const real = await realContext.newPage(); await real.goto(base);
+  const independent = await real.evaluate(async path => {
     async function run(duration, heartbeat) {
       return new Promise((resolve, reject) => {
-        const worker = new Worker(workerPath); let beat;
-        const timeout = setTimeout(() => { worker.terminate(); clearInterval(beat); reject(new Error('worker did not self-stop')); }, 5000);
+        const worker = new Worker(path); let beat;
+        const timeout = setTimeout(() => { worker.terminate(); clearInterval(beat); reject(new Error('self-stop timeout')); }, 6000);
         worker.onmessage = ({ data }) => {
-          if (data.type === 'ready') {
-            worker.postMessage({ type: 'start', duty: .12, endAt: performance.timeOrigin + performance.now() + duration });
-            if (heartbeat) beat = setInterval(() => worker.postMessage({ type: 'heartbeat' }), 100);
-          }
-          if (data.type === 'stopped') { clearTimeout(timeout); clearInterval(beat); worker.terminate(); resolve(data.reason); }
+          if (data.type === 'ready') { worker.postMessage({ type: 'start', duty: .12, endAt: performance.timeOrigin + performance.now() + duration }); if (heartbeat) beat = setInterval(() => worker.postMessage({ type: 'heartbeat' }), 100); }
+          if (data.type === 'stopped') { clearInterval(beat); clearTimeout(timeout); worker.terminate(); resolve(data.reason); }
         };
       });
     }
     return [await run(250, true), await run(5000, false)];
-  }, workerPath);
-  await independentContext.close();
-  assert.deepEqual(independent, ['deadline', 'heartbeat']); checks.push('Worker 独立到期自停与心跳丢失自停（真实时钟）');
-  await page.goto(base);
-  await page.locator('#open-manual').click(); assert(await page.locator('#manual').isVisible());
-  await page.keyboard.press('Escape'); assert(!(await page.locator('#manual').isVisible())); checks.push('使用手册与 Escape 关闭');
-  for (const width of [320, 375, 390, 768, 1024, 1440, 1920]) {
-    await page.setViewportSize({ width, height: 900 });
-    const geometry = await page.evaluate(() => {
-      const h = document.querySelector('.heater').getBoundingClientRect();
-      return { viewport: innerWidth, scroll: document.documentElement.scrollWidth, left: h.left, right: h.right };
-    });
-    assert(geometry.scroll <= width, `horizontal overflow at ${width}: ${JSON.stringify(geometry)}`);
-    assert(geometry.left >= 0 && geometry.right <= width);
-  }
-  checks.push('320 / 375 / 390 / 768 / 1024 / 1440 / 1920 px 布局无横向溢出');
-  await page.locator('#demo').check();
-  await page.locator('#power').click();
-  for (const width of [320, 390, 768, 1024, 1440]) {
-    await page.setViewportSize({ width, height: 900 });
-    await page.waitForTimeout(250);
-    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `lit-state overflow at ${width}`);
-  }
-  await page.locator('#stop').click();
-  checks.push('开机光晕在五种视口宽度内不产生横向滚动');
-
-  const errorContext = await browser.newContext();
-  errorContext.setDefaultTimeout(10000);
-  await errorContext.addInitScript(instrumentWorkers);
-  const failure = await errorContext.newPage();
-  await failure.route('**/load-worker*.js', route => route.abort());
-  await failure.goto(base); await failure.locator('#power').click();
-  await failure.waitForFunction(() => document.querySelector('#feedback-text').textContent.includes('无法启动') || document.querySelector('#feedback-text').textContent.includes('未能运行'));
-  assert.equal(await failure.locator('#heater').getAttribute('data-on'), 'false');
-  assert((await failure.evaluate(() => window.__pool)).every(w => w.terminated)); await failure.close();
-  checks.push('Worker 加载失败关闭并给出演示模式提示');
-  const race = await errorContext.newPage();
-  await race.route('**/load-worker*.js', async route => { await new Promise(resolve => setTimeout(resolve, 250)); await route.continue().catch(() => {}); });
-  await race.goto(base);
-  await race.locator('#power').click(); await race.locator('#power').click();
-  await race.waitForTimeout(500);
-  assert.equal(await race.locator('#heater').getAttribute('data-on'), 'false');
-  assert((await race.evaluate(() => window.__pool)).every(w => w.terminated)); await race.close();
-  checks.push('启动期间取消不会因迟到的 Worker 就绪而重启');
-  assert.deepEqual(errors, []); checks.push('正常流程无页面 JavaScript 异常');
-  console.log(JSON.stringify({ engine: 'Chromium', passed: checks.length, checks }, null, 2));
+  }, manifest['load-worker.js'] || 'load-worker.js');
+  assert.deepEqual(independent, ['deadline', 'heartbeat']); checks.push('CPU Worker 使用真实时钟独立到期和失去心跳自停');
+  await real.locator('#cpu').uncheck(); await real.locator('#gpu').check(); await real.locator('button[data-mode=toasty]').click();
+  await real.locator('#power').click();
+  await real.waitForFunction(() => window.__pool.some(w => /gpu-worker/.test(w.url) && w.received.some(m => m.type === 'stats' || m.type === 'unavailable')));
+  const hardware = await real.evaluate(() => window.__pool.some(w => /gpu-worker/.test(w.url) && w.received.some(m => m.type === 'stats')));
+  if (hardware) {
+    await real.waitForFunction(() => window.__pool.some(w => /gpu-worker/.test(w.url) && w.received.some(m => m.type === 'stats' && m.frames >= 3 && m.steps === 384)));
+    await real.locator('#cpu').check();
+    await real.waitForFunction(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated && w.sent.some(m => m.duty === .92)).length === 6);
+    const start = Date.now(); await real.locator('#power').click();
+    await real.waitForFunction(() => window.__pool.every(w => w.terminated));
+    assert(Date.now() - start < 1000);
+    checks.push('硬件 GPU 着色器完成多个批次，CPU / GPU 同时高档时停止可响应');
+    await real.locator('#cpu').uncheck(); await real.locator('#power').click();
+    await real.waitForFunction(() => document.querySelector('#gpu').closest('.source').classList.contains('is-active'));
+    await real.evaluate(() => window.dispatchEvent(new Event('blur')));
+    await real.waitForFunction(() => window.__pool.every(w => w.terminated));
+    checks.push('GPU 运行时失去焦点释放 Worker');
+    const gpuSelfStop = await real.evaluate(async path => {
+      async function run(duration, heartbeat) {
+        return new Promise((resolve, reject) => {
+          const worker = new Worker(path); let beat;
+          const timeout = setTimeout(() => { worker.terminate(); clearInterval(beat); reject(new Error('GPU self-stop timeout')); }, 7000);
+          worker.onmessage = ({ data }) => {
+            if (data.type === 'ready') { worker.postMessage({ type: 'start', mode: 'gentle', endAt: performance.timeOrigin + performance.now() + duration }); if (heartbeat) beat = setInterval(() => worker.postMessage({ type: 'heartbeat' }), 100); }
+            if (data.type === 'stopped') { clearInterval(beat); clearTimeout(timeout); worker.terminate(); resolve(data.reason); }
+            if (data.type === 'unavailable') { clearInterval(beat); clearTimeout(timeout); worker.terminate(); reject(new Error(data.reason)); }
+          };
+        });
+      }
+      return [await run(300, true), await run(5000, false)];
+    }, manifest['gpu-worker.js'] || 'gpu-worker.js');
+    assert.deepEqual(gpuSelfStop, ['deadline', 'heartbeat']); checks.push('GPU Worker 使用真实时钟独立到期和失去心跳自停');
+  } else checks.push('当前后端没有硬件 GPU：正确提示不可用，硬件负载路径未验');
+  const failed = await realContext.newPage(); await failed.route('**/load-worker*.js', route => route.abort());
+  await failed.goto(base); await failed.locator('#power').click();
+  await failed.waitForFunction(() => /计算已停止|无法启动计算/.test(document.querySelector('#feedback-text').textContent));
+  assert.equal(await failed.locator('#heater').getAttribute('data-on'), 'false');
+  checks.push('CPU Worker 加载失败停止并反馈');
+  const race = await realContext.newPage();
+  await race.route('**/load-worker*.js', async route => { await new Promise(resolve => setTimeout(resolve, 200)); await route.continue().catch(() => {}); });
+  await race.goto(base); await race.locator('#power').click(); await race.locator('#power').click(); await race.waitForTimeout(350);
+  assert.equal(await race.locator('#heater').getAttribute('data-on'), 'false'); assert(await race.evaluate(() => window.__pool.every(w => w.terminated)));
+  checks.push('启动中取消不会被迟到的就绪事件重启');
+  await realContext.close(); assert.deepEqual(errors, []); checks.push('正常流程无页面 JavaScript 异常');
+  console.log(JSON.stringify({ engine: 'Chromium', backend: process.env.TEST_GPU_BACKEND || 'default', passed: checks.length, checks }, null, 2));
 } finally { await browser.close(); }
+const softwareBrowser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader'] });
+try {
+  const c = await contextFor(softwareBrowser); const p = await c.newPage(); await p.goto(base);
+  await p.locator('#gpu').check(); await p.locator('#power').click();
+  await p.waitForFunction(() => document.querySelector('#feedback-text').textContent === 'GPU 不可用');
+  assert(!(await p.locator('#gpu').isChecked())); assert.equal(await p.locator('#heater').getAttribute('data-on'), 'true');
+  assert(await p.evaluate(() => window.__pool.some(w => /load-worker/.test(w.url) && !w.terminated)));
+  await p.locator('#power').click(); console.log('SwiftShader：拒绝将软件渲染当成 GPU，CPU 仍可运行。');
+} finally { await softwareBrowser.close(); }
 try {
   const wb = await webkit.launch({ headless: true });
-  const wp = await wb.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-  await wp.goto(base); await wp.locator('#power').click();
-  await wp.waitForFunction(() => document.querySelector('#heater').dataset.on === 'true');
-  await wp.locator('#power').click();
-  assert.equal(await wp.locator('#heater').getAttribute('data-on'), 'false');
-  await wb.close(); console.log('WebKit: 实际 Worker 启停通过（模拟手机视口，非真实手机）');
-} catch (error) {
-  if (/Executable doesn't exist/.test(error.message)) console.log('WebKit: 未安装，未验证');
-  else throw error;
-}
+  try {
+    const p = await wb.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    await p.goto(base); await p.locator('#power').click(); await p.waitForFunction(() => document.querySelector('#heater').dataset.on === 'true');
+    await p.locator('#power').click(); assert.equal(await p.locator('#heater').getAttribute('data-on'), 'false');
+    console.log('WebKit：手机视口 CPU 启停通过。');
+  } finally { await wb.close(); }
+} catch (error) { if (/Executable doesn't exist/.test(error.message)) console.log('WebKit 未安装，未验证。'); else throw error; }
