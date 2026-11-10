@@ -135,6 +135,7 @@ $('demo').addEventListener('change', event => {
   feedback(state.demo ? '已选仅看炉火。按下电源点亮，不产生计算负载。' : '已选设备暖手。按下电源后将启动计算并增加耗电。');
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden && state.phase !== 'idle') stop('你离开了一会儿，小暖已自动停止。回来后需要手动开启。'); });
+window.addEventListener('blur', () => { if (state.phase !== 'idle') stop('页面已失去焦点，小暖先休息了。回来后需要手动开启。'); });
 window.addEventListener('pagehide', () => stop());
 document.addEventListener('freeze', () => stop());
 window.addEventListener('pageshow', event => { if (event.persisted) stop('欢迎回来，暖炉保持关闭。按下电源重新开启。'); });

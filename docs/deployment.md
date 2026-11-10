@@ -1,6 +1,8 @@
 # 部署到腾讯云 EdgeOne
 
-访问域名：<https://warm.gongfpp.icu/>。
+目标域名：<https://warm.gongfpp.icu/>。
+
+EdgeOne 默认访问地址：<https://cyber-handwarmer-a0z0axp0.edgeone.dev/>。项目名 `cyber-handwarmer`，采用直接上传，当前发布区域为海外。
 
 项目是纯静态网站，不需要服务器、数据库或环境变量。先运行：
 
@@ -23,7 +25,7 @@ edgeone whoami
 在工程目录上传到自己的项目：
 
 ```sh
-edgeone makers deploy dist/ -n cyber-handwarmer -e production
+edgeone makers deploy dist/ -n cyber-handwarmer -e production --area overseas
 ```
 
 CLI 使用本机登录状态，不要把 Token 放进代码、提交记录或公开文档。若已有同名项目，应先确认该项目属于自己且用于小暖；换一个名称可以创建独立项目。

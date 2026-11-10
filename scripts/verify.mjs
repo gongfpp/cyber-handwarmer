@@ -62,6 +62,8 @@ try {
   await page.locator('#demo').uncheck();
   await page.locator('#power').click(); await page.waitForFunction(() => document.querySelector('#heater').dataset.on === 'true');
   await page.evaluate(() => window.dispatchEvent(new Event('pagehide'))); await off(); checks.push('离开页面事件终止 Worker');
+  await page.locator('#power').click(); await page.waitForFunction(() => document.querySelector('#heater').dataset.on === 'true');
+  await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await off(); checks.push('窗口失去焦点事件终止 Worker');
   // Fast-forward only the window clock; real Workers remain bounded and are terminated by the controller.
   await page.clock.install();
   await page.locator('[data-minutes="1"]').click();
