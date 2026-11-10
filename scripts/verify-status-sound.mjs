@@ -58,7 +58,7 @@ try {
   assert.equal(await p.evaluate(()=>window.__contexts.length),0);
   assert.equal(await p.evaluate(()=>window.__workers.length),0);
   assert.equal(await p.locator('#cpu-target').innerText(),'目标 40%');
-  assert.equal(await p.locator('#gpu-target').innerText(),'目标 35%');
+  assert.equal(await p.locator('#gpu-target').innerText(),'目标 30%');
   assert.equal(await p.locator('#cpu-status').innerText(),'已停止'); assert.equal(await p.locator('#gpu-status').innerText(),'已关闭');
   assert.equal(await p.locator('button[aria-label*=声音],button[aria-label*=音效],button[aria-label*=静音],input[type=range]').count(),0);
   checks.push('初次打开无音频上下文、无计算任务；无声音开关或音量控件，目标显示当前档位的 CPU/GPU 工作比例');

@@ -1,7 +1,7 @@
 // Hardware hints stay on this page. They are bounds, not exact model/temperature readings.
 export const MODES = Object.freeze({
-  gentle: { name: '轻柔', share: .25, duty: .40, gpuDuty: .35 },
-  cozy: { name: '温暖', share: .65, duty: .82, gpuDuty: .75 },
+  gentle: { name: '轻柔', share: .25, duty: .40, gpuDuty: .30 },
+  cozy: { name: '温暖', share: .65, duty: .82, gpuDuty: .60 },
   toasty: { name: '热烈', share: 1, duty: .85, gpuDuty: .85 },
 });
 export function deviceCapabilities(navigatorLike = navigator) {

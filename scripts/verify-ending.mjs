@@ -27,10 +27,10 @@ try{
  const {c,p}=await setup();
  assert.equal(await p.locator('#open-manual,#manual,dialog,#feedback').count(),0);assert(!(await p.locator('body').innerText()).includes('?'));
  checks.push('页面不含问号、说明面板或结束提示条');
- for(const [mode,cpu,gpu]of[['gentle',40,35],['cozy',82,75],['toasty',85,85]]){
+ for(const [mode,cpu,gpu]of[['gentle',40,30],['cozy',82,60],['toasty',85,85]]){
   await p.locator(`button[data-mode=${mode}]`).tap();assert.equal(await p.locator('#cpu-target').innerText(),`目标 ${cpu}%`);assert.equal(await p.locator('#gpu-target').innerText(),`目标 ${gpu}%`);
  }
- checks.push('三档 CPU/GPU 目标分别为 40/35、82/75、85/85，切换即更新且最高档才同为 85%');
+ checks.push('三档 CPU/GPU 目标分别为 40/30、82/60、85/85，切换即更新且最高档才同为 85%');
  await p.locator('button[data-mode=gentle]').tap();await p.locator('#gpu').check();await p.locator('#power').tap();await lit(p);
  await p.waitForFunction(()=>document.querySelector('#cpu-readout').dataset.status==='running'&&document.querySelector('#gpu-readout').dataset.status==='running');
  const start=Date.now();await p.locator('#power').tap();assert.equal(await p.locator('#heater').getAttribute('data-on'),'false');
