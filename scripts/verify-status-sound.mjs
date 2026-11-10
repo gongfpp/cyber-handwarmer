@@ -49,7 +49,7 @@ async function setup() {
 }
 async function status(p,source,value) { await p.waitForFunction(({source,value})=>document.querySelector(`#${source}-readout`).dataset.status===value,{source,value}); }
 async function off(p) {
-  await p.waitForFunction(()=>document.querySelector('#heater').dataset.on==='false'); await p.waitForTimeout(300);
+  await p.waitForFunction(()=>document.querySelector('#heater').dataset.on==='false' && document.querySelector('#heater').dataset.ending!=='true'); await p.waitForTimeout(300);
   assert(await p.evaluate(()=>window.__workers.every(w=>w.terminated)));
   assert(await p.evaluate(()=>window.__contexts.every(c=>c.state==='suspended')));
 }
@@ -57,10 +57,11 @@ try {
   const { c,p } = await setup();
   assert.equal(await p.evaluate(()=>window.__contexts.length),0);
   assert.equal(await p.evaluate(()=>window.__workers.length),0);
-  assert.equal(await p.locator('#load-cap').innerText(),'目标工作比例 85%');
+  assert.equal(await p.locator('#cpu-target').innerText(),'目标 40%');
+  assert.equal(await p.locator('#gpu-target').innerText(),'目标 35%');
   assert.equal(await p.locator('#cpu-status').innerText(),'已停止'); assert.equal(await p.locator('#gpu-status').innerText(),'已关闭');
   assert.equal(await p.locator('button[aria-label*=声音],button[aria-label*=音效],button[aria-label*=静音],input[type=range]').count(),0);
-  checks.push('初次打开无音频上下文、无计算任务；无声音开关或音量控件，85% 明确为目标工作比例');
+  checks.push('初次打开无音频上下文、无计算任务；无声音开关或音量控件，目标显示当前档位的 CPU/GPU 工作比例');
   await p.locator('#power').tap();
   await status(p,'cpu','running'); assert.match(await p.locator('#cpu-value').innerText(),/\d+ 线程/);
   assert.match(await p.locator('#cpu-metric').innerText(),/次\/秒/);
@@ -90,7 +91,7 @@ try {
   assert.equal(await p.locator('#gpu-value').innerText(),'—'); await p.evaluate(()=>{window.__dropStats=false;}); await status(p,'gpu','running');
   checks.push('GPU 过期数据同样撤下，新回报才恢复运行状态');
   await p.locator('#power').tap(); await off(p); await status(p,'gpu','stopped');
-  checks.push('停止后计算线程退出、状态清空、音频淡出并挂起');
+  checks.push('停止后计算线程退出、状态清空、熄火音效结束后音频挂起');
   await p.locator('#cpu').check(); await p.locator('#gpu').uncheck(); await p.locator('#power').tap(); await status(p,'cpu','running');
   await p.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});document.dispatchEvent(new Event('visibilitychange'));});
   await off(p); await p.evaluate(()=>{delete document.hidden;document.dispatchEvent(new Event('visibilitychange'));});
@@ -111,7 +112,7 @@ try {
  await c.addInitScript(()=>{window.__contexts=[];const Native=window.AudioContext;window.AudioContext=new Proxy(Native,{construct(t,args){const c=Reflect.construct(t,args);window.__contexts.push(c);return c;}});});
  const p=await c.newPage();await p.goto(base);await p.locator('#power').tap();await status(p,'cpu','running');
  assert(await p.evaluate(()=>window.__contexts.some(c=>c.state==='running')));
- await p.locator('#power').tap();await p.waitForTimeout(350);assert(await p.evaluate(()=>window.__contexts.every(c=>c.state==='suspended')));
+ await p.locator('#power').tap();await p.waitForFunction(()=>document.querySelector('#heater').dataset.ending!=='true');await p.waitForTimeout(350);assert(await p.evaluate(()=>window.__contexts.every(c=>c.state==='suspended')));
  checks.push('WebKit 手机触控可解锁声音，CPU 真实状态与停声通过（非手机真机）');
  await c.close();
 } finally{await wb.close();}

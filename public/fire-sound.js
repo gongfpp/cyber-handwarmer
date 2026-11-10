@@ -1,7 +1,7 @@
 // Procedural fire: filtered pink noise, a slow breath, and irregular wood crackles.
 // The power gesture unlocks audio; there is no autoplay on page load or sound control.
 export class FireSound {
-  context = null; graph = null; generation = 0; releaseTimer = null; pendingRelease = null;
+  context = null; graph = null; outro = null; generation = 0; releaseTimer = null; pendingRelease = null;
   arm() {
     try {
       const Context = globalThis.AudioContext || globalThis.webkitAudioContext;
@@ -73,8 +73,40 @@ export class FireSound {
     source.onended = () => { source.disconnect(); filter.disconnect(); envelope.disconnect(); g.pops.delete(source); };
     source.start(); source.stop(time + .12);
   }
+  extinguish() {
+    this.stop(true, false);
+    const context = this.context;
+    if (!context || context.state !== 'running') return;
+    const time = context.currentTime, outro = this.outro = { nodes: [], sources: [], timer: null };
+    try {
+      const hiss = (delay, duration, level, frequency) => {
+        const source = context.createBufferSource(); source.buffer = this.noise(duration);
+        const filter = context.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = frequency;
+        const gain = context.createGain(); gain.gain.setValueAtTime(0, time + delay);
+        gain.gain.linearRampToValueAtTime(level, time + delay + .025);
+        gain.gain.exponentialRampToValueAtTime(.0001, time + delay + duration);
+        source.connect(filter).connect(gain).connect(context.destination);
+        source.start(time + delay); source.stop(time + delay + duration);
+        outro.nodes.push(source, filter, gain); outro.sources.push(source);
+      };
+      hiss(.46, .48, .065, 2400); hiss(1.13, .09, .055, 900); hiss(2.04, .2, .045, 2100);
+      const drop = context.createOscillator(), gain = context.createGain();
+      drop.frequency.setValueAtTime(620, time + 2.01); drop.frequency.exponentialRampToValueAtTime(190, time + 2.10);
+      gain.gain.setValueAtTime(0, time + 2.01); gain.gain.linearRampToValueAtTime(.065, time + 2.02); gain.gain.exponentialRampToValueAtTime(.0001, time + 2.13);
+      drop.connect(gain).connect(context.destination); drop.start(time + 2.01); drop.stop(time + 2.14);
+      outro.nodes.push(drop, gain); outro.sources.push(drop);
+      outro.timer = setTimeout(() => { if (this.outro === outro) this.stop(true); }, 2300);
+    } catch { this.stop(true); }
+  }
   stop(immediate = false, suspend = true) {
-    this.generation++; clearTimeout(this.releaseTimer); this.releaseTimer = null;
+    this.generation++;
+    if (this.outro) {
+      clearTimeout(this.outro.timer);
+      for (const source of this.outro.sources) { try { source.stop(); } catch {} }
+      for (const node of this.outro.nodes) node.disconnect();
+      this.outro = null;
+    }
+    clearTimeout(this.releaseTimer); this.releaseTimer = null;
     this.pendingRelease?.(); this.pendingRelease = null;
     const g = this.graph; this.graph = null;
     if (!g) { if (suspend) this.context?.suspend().catch(() => {}); return; }

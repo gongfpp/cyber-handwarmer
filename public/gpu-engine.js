@@ -1,12 +1,13 @@
+import { MODES } from './adaptive-policy.js';
 // One bounded GPU batch at a time, in a Worker when possible, otherwise on a small DOM canvas.
 export function createGPUEngine({ createCanvas, emit, finish = () => {}, mobile = false, mainThread = false }) {
   function schedule(next, delay) {
     task = setTimeout(() => { try { next(); } catch { stop('context-lost', 'unavailable'); } }, delay);
   }
   const profiles = {
-    gentle: { duty: .35, steps: 96, maxSide: 768, targetMs: 8 },
-    cozy: { duty: .75, steps: 192, maxSide: 1536, targetMs: 18 },
-    toasty: { duty: .85, steps: 384, maxSide: 2048, targetMs: 35 },
+    gentle: { duty: MODES.gentle.gpuDuty, steps: 96, maxSide: 768, targetMs: 8 },
+    cozy: { duty: MODES.cozy.gpuDuty, steps: 192, maxSide: 1536, targetMs: 18 },
+    toasty: { duty: MODES.toasty.gpuDuty, steps: 384, maxSide: 2048, targetMs: 35 },
   };
   let gl, canvas, program, textures = [], framebuffers = [], sync = null;
   let disposed = false, buffer = null;

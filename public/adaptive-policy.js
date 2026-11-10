@@ -1,8 +1,8 @@
 // Hardware hints stay on this page. They are bounds, not exact model/temperature readings.
 export const MODES = Object.freeze({
-  gentle: { name: '轻柔', share: .25, duty: .40 },
-  cozy: { name: '温暖', share: .65, duty: .82 },
-  toasty: { name: '热烈', share: 1, duty: .85 },
+  gentle: { name: '轻柔', share: .25, duty: .40, gpuDuty: .35 },
+  cozy: { name: '温暖', share: .65, duty: .82, gpuDuty: .75 },
+  toasty: { name: '热烈', share: 1, duty: .85, gpuDuty: .85 },
 });
 export function deviceCapabilities(navigatorLike = navigator) {
   const touch = Number(navigatorLike.maxTouchPoints) > 0;

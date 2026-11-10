@@ -41,7 +41,7 @@ try {
     for (const skin of ['nordic','retro']) {
       await page.locator(`button[data-skin=${skin}]`).tap();
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `overflow ${width}x${height}`);
-      for (const selector of ['#power','#cpu','#gpu','#open-manual','button[data-mode=gentle]','[data-minutes="1"]']) {
+      for (const selector of ['#power','#cpu','#gpu','button[data-mode=gentle]','[data-minutes="1"]']) {
         const rect = await page.locator(selector === '#cpu' || selector === '#gpu' ? `${selector} + span` : selector).boundingBox();
         assert(rect && rect.x >= 0 && rect.y >= 0 && rect.x + rect.width <= width + 1 && rect.y + rect.height <= height + 1, `${selector} outside ${width}x${height}: ${JSON.stringify(rect)}`);
         assert(rect.height >= 43.99, `${selector} touch height ${rect.height}`);
@@ -57,22 +57,21 @@ try {
   await page.waitForFunction(() => window.__workers.filter(w => /load-worker/.test(w.url) && !w.terminated).length >= 3);
   await page.locator('#power').tap(); await stopped(page);
   checks.push('手机从一至两个 CPU 线程校准起步，响应正常后升载，停止释放全部线程');
-  await page.locator('#open-manual').tap(); assert(await page.locator('#manual').isVisible());
-  assert(await page.locator('#close-manual').isVisible()); await page.locator('#close-manual').tap();
+  assert.equal(await page.locator('#open-manual, #manual, dialog').count(), 0);
   await context.close();
 
   // Older iOS/WebViews can have WebGL2 on HTMLCanvasElement but not on OffscreenCanvas.
   const fallback = await setup(() => { window.OffscreenCanvas = undefined; });
   await fallback.page.locator('#cpu').uncheck(); await fallback.page.locator('#gpu').check(); await fallback.page.locator('#power').tap();
   await gpuActive(fallback.page); await active(fallback.page);
-  await fallback.page.waitForFunction(() => /兼容模式/.test(document.querySelector('#gpu-detail').textContent));
+  await fallback.page.waitForFunction(() => document.querySelector('#gpu-readout').dataset.backend === 'page-webgl2');
   assert.equal(await fallback.page.evaluate(() => window.__workers.length), 0);
   await fallback.page.evaluate(() => document.dispatchEvent(new Event('freeze'))); await stopped(fallback.page);
   await fallback.context.close(); checks.push('缺少 OffscreenCanvas 时使用页面 WebGL2；冻结立即释放 GPU 上下文');
 
   const broken = await setup(); await broken.page.route('**/gpu-worker*.js', route => route.abort());
   await broken.page.locator('#gpu').check(); await broken.page.locator('#power').tap(); await active(broken.page); await gpuActive(broken.page);
-  await broken.page.waitForFunction(() => /兼容模式/.test(document.querySelector('#gpu-detail').textContent));
+  await broken.page.waitForFunction(() => document.querySelector('#gpu-readout').dataset.backend === 'page-webgl2');
   await broken.page.locator('#power').tap(); await stopped(broken.page); await broken.context.close();
   checks.push('GPU Worker / module 启动失败时自动切换页面 WebGL2，CPU 继续运行');
 
@@ -84,7 +83,7 @@ try {
   await noGPU.page.locator('#cpu').uncheck(); await noGPU.page.locator('#gpu').check(); await noGPU.page.locator('#power').tap();
   await active(noGPU.page); assert(await noGPU.page.locator('#gpu').isDisabled()); assert(await noGPU.page.locator('#cpu').isChecked());
   assert(await noGPU.page.evaluate(() => window.__workers.some(w => /load-worker/.test(w.url) && !w.terminated)));
-  assert.equal(await noGPU.page.locator('#feedback-text').innerText(), '');
+  assert.equal(await noGPU.page.locator('#feedback, #manual').count(), 0);
   await noGPU.page.locator('#power').tap(); await stopped(noGPU.page); await noGPU.context.close();
   checks.push('GPU 不支持时自动选择 CPU、禁用 GPU，无新增提示文案');
 
@@ -126,8 +125,8 @@ try {
     WebGL2RenderingContext.prototype.getExtension = function(name) { return name === 'EXT_disjoint_timer_query_webgl2' ? null : native.call(this, name); };
   });
   await missing.page.locator('#gpu').check(); await missing.page.locator('#power').tap(); await active(missing.page); await gpuActive(missing.page);
-  assert((await missing.page.locator('#cpu-detail').innerText()).includes('2 个逻辑处理器'));
-  await missing.page.waitForFunction(() => /完成等待/.test(document.querySelector('#gpu-detail').textContent));
+  assert.equal(await missing.page.locator('#cpu-readout').getAttribute('data-cores'), '2');
+  await missing.page.waitForFunction(() => document.querySelector('#gpu-readout').dataset.measurement === 'fence-wall');
   await missing.page.locator('#power').tap(); await stopped(missing.page); await missing.context.close();
   checks.push('核心数/内存/硬件计时扩展缺失时仍可运行，保守调度且不冒充 GPU 硬件计时');
   const quota = await setup(() => {
@@ -158,7 +157,7 @@ try {
   await p.waitForFunction(() => document.querySelector('#gpu').disabled || document.querySelector('#gpu').closest('.source').classList.contains('is-active'));
   if (await p.locator('#gpu').isDisabled()) checks.push('WebKit 手机视口 GPU 不可用时成功降级 CPU（非 iPhone 真机）');
   else {
-    await p.waitForFunction(() => /自动.*×/.test(document.querySelector('#gpu-detail').textContent));
+    await p.waitForFunction(() => document.querySelector('#gpu-readout').dataset.status === 'running');
     checks.push('WebKit 手机视口 GPU 实际完成批次（非 iPhone 真机）');
   }
   await p.locator('#power').tap();

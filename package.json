@@ -1,6 +1,6 @@
 {
   "name": "a-little-warmth",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "private": true,
   "type": "module",
   "description": "小暖 · CPU / GPU 暖手与北欧壁炉展示",
@@ -10,7 +10,8 @@
     "preview": "node scripts/serve.mjs dist",
     "verify": "node scripts/verify.mjs",
     "verify:mobile": "node scripts/verify-mobile.mjs",
-    "verify:status": "node scripts/verify-status-sound.mjs"
+    "verify:status": "node scripts/verify-status-sound.mjs",
+    "verify:ending": "node scripts/verify-ending.mjs"
   },
   "license": "MIT",
   "repository": {

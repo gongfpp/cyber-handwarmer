@@ -46,7 +46,8 @@ try {
   assert.equal(await page.evaluate(() => window.__pool.length), 0);
   await page.locator('button[data-mode=toasty]').click(); await page.locator('[data-minutes="3"]').click();
   assert.equal(await page.evaluate(() => window.__pool.length), 0);
-  assert.equal(await page.locator('#load-cap').innerText(), '目标工作比例 85%');
+  assert.equal(await page.locator('#cpu-target').innerText(), '目标 85%');
+  assert.equal(await page.locator('#gpu-target').innerText(), '目标 85%');
   checks.push('首次打开、预选不创建 Worker，页面显示目标工作比例 85%');
   await page.locator('#power').click(); await lit();
   await page.waitForFunction(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated && w.sent.some(m => m.duty >= .849)).length === 8);
@@ -93,9 +94,8 @@ try {
     await page.evaluate(event => window.dispatchEvent(new Event(event)), event); await off();
   }
   checks.push('离开页面终止计算');
-  await page.locator('#open-manual').click(); assert(await page.locator('#manual').isVisible());
-  await page.keyboard.press('Escape'); assert(!(await page.locator('#manual').isVisible()));
-  checks.push('帮助面板可用并支持 Escape');
+  assert.equal(await page.locator('#open-manual, #manual, dialog').count(), 0);
+  checks.push('问号、说明面板已移除');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.locator('#cpu').uncheck(); await page.locator('#power').click(); await lit();
   assert.equal(await page.locator('.tongue').first().evaluate(el => getComputedStyle(el).animationName), 'none');
@@ -178,7 +178,7 @@ try {
   const smallContext = await contextFor(browser, 2); const small = await smallContext.newPage();
   await small.goto(base); await small.locator('button[data-mode=toasty]').click(); await small.locator('#power').click();
   await small.waitForFunction(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated).length === 2);
-  assert((await small.locator('#cpu-detail').textContent()).includes('2 个逻辑处理器'));
+  assert.equal(await small.locator('#cpu-readout').getAttribute('data-cores'), '2');
   await small.locator('#power').click(); await smallContext.close();
   checks.push('浏览器报告 2 核时自动使用 2 线程，区别于 8 核设备');
   await realContext.close(); assert.deepEqual(errors, []); checks.push('正常流程无页面 JavaScript 异常');
