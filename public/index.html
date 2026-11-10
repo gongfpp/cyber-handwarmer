@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f3eee4"><meta name="description" content="一台放在浏览器里的复古暖手炉。三档可调、限时运行，也可以只看炉火，享受一点冬日暖意。">
+  <title>小暖 · 赛博暖手宝</title><link rel="icon" href="./icon.svg" type="image/svg+xml"><link rel="stylesheet" href="./style.css"><script type="module" src="./app.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="./" aria-label="小暖首页"><img src="./icon.svg" width="34" height="34" alt="小暖暖炉图标"><span>小暖<span class="brand-en">A LITTLE WARMTH</span></span></a>
+    <div class="header-right"><span class="edition">冬日桌面计划 · No. 001</span><button class="manual-link" id="open-manual">使用手册 <span aria-hidden="true">↗</span></button></div>
+  </header>
+  <main>
+    <section class="studio" aria-labelledby="hero-title">
+      <div class="intro">
+        <div class="eyebrow"><span class="sun-mark" aria-hidden="true">✳</span> YOUR LITTLE WINTER COMPANION</div>
+        <h1 id="hero-title">把冬天，<br>调暖<span class="italic">一点</span>。<span class="title-dot"></span></h1>
+        <p class="intro-copy">给冰凉的指尖，留一小片暖意。<br>一台藏在浏览器里的复古暖手炉，<br>陪你把眼前的日子，慢慢过暖。</p>
+        <div class="hand-note"><svg width="53" height="36" viewBox="0 0 53 36" aria-hidden="true"><path d="M3 5C17 0 20 26 47 23M38 15l11 9-13 7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>按下电源，暖一小会儿</span></div>
+        <div class="session-note"><span class="note-icon" aria-hidden="true">◷</span><div><strong id="session-heading">一点温暖，刚刚好</strong><p id="session-copy">默认 1 分钟，到点自动关机。</p></div></div>
+      </div>
+      <div class="product-stage">
+        <div class="ambient" aria-hidden="true"></div><div class="stage-orbit" aria-hidden="true"></div>
+        <div class="product-tag" aria-hidden="true"><span>DESIGNED FOR</span><strong>慢下来的时刻</strong><i>since this winter</i></div>
+        <div class="heater" id="heater" data-mode="gentle" data-on="false">
+          <div class="carry-handle" aria-hidden="true"></div>
+          <div class="heater-shell">
+            <div class="device-header"><div class="device-wordmark">小暖 <span>WARM—01</span></div><div class="device-status"><span id="status-led"></span><span id="device-state">待机中</span></div></div>
+            <div class="grill" aria-hidden="true"><div class="reflector"></div><div class="coils"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="grill-mesh"></div><div class="grill-rail top"></div><div class="grill-rail bottom"></div><div class="grill-badge">LITTLE WARMTH</div></div>
+            <div class="display" role="timer" aria-label="剩余时间"><div class="display-left"><span class="display-label" id="display-label">READY WHEN YOU ARE</span><div class="digits" id="countdown">01<span>:</span>00</div></div><div class="display-right"><span class="heat-waves" aria-hidden="true">≋</span><strong id="display-mode">轻柔</strong><span id="display-kind">计算待机</span></div><div class="progress-track"><i id="progress"></i></div></div>
+            <fieldset class="control-field modes"><legend>暖意档位 <span>WARMTH</span></legend><div class="segmented" id="modes"><button type="button" data-mode="gentle" aria-pressed="true"><span aria-hidden="true">Ⅰ</span>轻柔</button><button type="button" data-mode="cozy" aria-pressed="false"><span aria-hidden="true">Ⅱ</span>温暖</button><button type="button" data-mode="toasty" aria-pressed="false"><span aria-hidden="true">Ⅲ</span>热烈</button></div></fieldset>
+            <div class="bottom-controls"><fieldset class="control-field timer"><legend>定时休息 <span>MINUTES</span></legend><div class="time-buttons" id="durations"><button type="button" data-minutes="1" aria-pressed="true">1<span>分</span></button><button type="button" data-minutes="3" aria-pressed="false">3<span>分</span></button><button type="button" data-minutes="5" aria-pressed="false">5<span>分</span></button></div></fieldset><button class="power-button" id="power" aria-label="开启暖手" aria-pressed="false"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M6.4 5.9a8 8 0 1 0 11.2 0" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" fill="none"/></svg><span id="power-label">开启暖手</span></button></div>
+            <div class="device-footer"><span>给自己一点暖意</span><span>INPUT: A LITTLE PAUSE</span></div>
+          </div><div class="feet" aria-hidden="true"><i></i><i></i></div>
+        </div>
+        <div class="surface-shadow" aria-hidden="true"></div><span class="stage-caption">一小炉光 · 一小段自己的时间</span>
+      </div>
+    </section>
+    <section class="utility-bar" aria-label="运行设置与状态">
+      <label class="demo-toggle"><input type="checkbox" id="demo"><span class="switch" aria-hidden="true"></span><span><strong>仅看炉火</strong><span class="setting-subtitle">不产生计算负载</span></span></label>
+      <div class="load-info"><span class="small-sun" aria-hidden="true">✳</span><div><strong id="load-title">轻柔 · 轻量计算</strong><span id="load-description">启动后，最多 2 个计算线程 / 12% 工作占空比</span></div></div>
+      <button id="stop" class="stop-button" disabled><span aria-hidden="true">■</span> 停止运行</button>
+    </section>
+    <div class="feedback" role="status" aria-live="polite" aria-atomic="true"><span class="feedback-dot" aria-hidden="true"></span><span id="feedback-text">还没开机。选好档位，按下电源就好。</span></div>
+    <section class="little-notes" aria-label="使用提示"><p><span>01</span><strong>由你开启</strong>只有按下电源，才会开始计算。</p><p><span>02</span><strong>离开就休息</strong>切换标签或应用后自动停止。</p><p><span>03</span><strong>暖意因机而异</strong>显示的是时间，设备温度无法读取。</p></section>
+  </main>
+  <footer class="site-footer"><span>小暖 © 2026 <i>愿你的冬天，有一点点暖。</i></span><span>灵感来自 <a href="https://ac.yunyoujun.cn/" target="_blank" rel="noopener noreferrer">云游君的便携小空调 ↗</a></span></footer>
+  <dialog id="manual" aria-labelledby="manual-title"><button class="close-dialog" id="close-manual" aria-label="关闭使用手册">×</button><span class="eyebrow">A LITTLE OWNER’S MANUAL</span><h2 id="manual-title">小暖的使用手册</h2><p>这是一台有真实计算负载的「赛博暖手宝」。它会增加设备耗电，实际是否变暖取决于设备与散热；网页不能读取真实温度。</p><ol><li><strong>选档、选时间，再按电源。</strong>轻柔、温暖、热烈对应 12%、30%、55% 的单线程工作占空比，最多使用 2 个 Worker，不代表整机 CPU 使用率。</li><li><strong>想放空，就「仅看炉火」。</strong>只播放轻量的视觉动效，不启动计算 Worker。切换模式会先停止，需重新按电源。</li><li><strong>离开、到点，都收工。</strong>隐藏页面、切换应用、离开页面或倒计时结束会停止计算，回来后不会自动重启。运行时更改定时会从新时长重新计时。</li></ol><p class="manual-note">设备明显发烫或出现不适时，请立即停止。不要遮挡散热口，也不要以它替代正规的取暖设备。</p><button class="manual-done" id="manual-done">知道了，暖一会儿</button></dialog>
+  <noscript><div class="noscript">请启用 JavaScript 后使用暖手炉；当前没有产生计算负载。</div></noscript>
+</body>
+</html>
