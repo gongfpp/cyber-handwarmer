@@ -21,3 +21,11 @@ const gentle = adaptCPU(current, cpuProfile('gentle', device(8)), { mainLagMs: 5
 assert.equal(gentle.count, 2); assert.equal(gentle.duty, .4);
 assert.equal(calibratedBatch(.01), 128); assert.equal(calibratedBatch(1e9), 8192);
 console.log('自适应策略：2 / 8 / 32 核、信息缺失、低内存、渐进升载、持续卡顿降载、单次抖动及切档边界通过。');
+
+for (const userAgent of ['iPhone', 'Android Mobile', 'HarmonyOS', 'OpenHarmony', 'Macintosh']) {
+  const mobile = deviceCapabilities({ hardwareConcurrency: 8, userAgent, maxTouchPoints: 5 });
+  assert(mobile.mobile); assert(cpuProfile('toasty', mobile).initialCount <= 2);
+  assert.equal(cpuProfile('toasty', mobile).maxCount, 8);
+}
+assert.equal(deviceCapabilities({ userAgent: 'iPhone', maxTouchPoints: 5 }).logical, 2);
+console.log('移动策略：iOS / 安卓 / 鸿蒙 / iPad 的低起步调度与缺失信息回退通过；能力是否可用由实际接口验证。');

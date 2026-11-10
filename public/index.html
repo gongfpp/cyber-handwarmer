@@ -31,7 +31,7 @@
     </section>
     <div id="feedback" class="feedback" role="status" aria-live="polite" aria-atomic="true"><span id="feedback-text"></span></div>
   </main>
-  <dialog id="manual" aria-labelledby="manual-title"><button id="close-manual" class="close-dialog" aria-label="关闭使用说明">×</button><h2 id="manual-title">使用说明</h2><p>85% 指 CPU 与 GPU 的目标工作比例上限，不是整机占用率。</p><p>选择档位和时间，按电源开启。再次按电源停止。CPU、GPU 均关闭时只展示炉火。</p><p>开始时会根据浏览器提供的逻辑处理器数量和短时校准自动分配任务，再根据响应速度调节。GPU 型号以浏览器实际提供的信息为准；无法读取完整硬件配置或温度。</p><p>GPU 使用 WebGL2，需要浏览器开启硬件加速；不支持时会提示，不会用软件计算冒充 GPU。</p><dl class="details"><div><dt>CPU</dt><dd id="cpu-detail"></dd></div><div><dt>GPU</dt><dd id="gpu-detail">未开启</dd></div></dl><p>档位调整不改变剩余时间，修改定时会重新计时。页面隐藏、离开或到点都会停止，返回后不会自动开启。网页仍可见时切换到其他窗口不会停，可与活动监视器并排查看。</p><p>计算会增加耗电，实际发热取决于设备和散热。显示的是剩余时间，网页无法读取设备温度。设备明显发烫或不适时请停止，不要遮挡散热口。</p></dialog>
+  <dialog id="manual" aria-labelledby="manual-title"><button id="close-manual" class="close-dialog" aria-label="关闭使用说明">×</button><h2 id="manual-title">使用说明</h2><p>85% 指 CPU 与 GPU 的目标工作比例上限，不是整机占用率。</p><p>选择档位和时间，按电源开启。再次按电源停止。CPU、GPU 均关闭时只展示炉火。</p><p>开始时会根据浏览器提供的逻辑处理器数量和短时校准自动分配任务，再根据响应速度调节。GPU 型号以浏览器实际提供的信息为准；无法读取完整硬件配置或温度。</p><p>CPU 与 GPU 在开启时检测。GPU 优先使用后台线程，不支持时尝试页面 WebGL2；仍不可用则自动改用 CPU。均不可用时只展示炉火，不可用的开关会变灰。不会用软件渲染冒充 GPU。</p><dl class="details"><div><dt>CPU</dt><dd id="cpu-detail"></dd></div><div><dt>GPU</dt><dd id="gpu-detail">未开启</dd></div></dl><p>档位调整不改变剩余时间，修改定时会重新计时。页面隐藏、离开或到点都会停止，返回后不会自动开启。网页仍可见时切换到其他窗口不会停，可与活动监视器并排查看。</p><p>计算会增加耗电，实际发热取决于设备和散热。显示的是剩余时间，网页无法读取设备温度。设备明显发烫或不适时请停止，不要遮挡散热口。</p></dialog>
   <noscript><p class="noscript">请启用 JavaScript。</p></noscript>
 </body>
 </html>

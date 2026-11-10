@@ -5,17 +5,20 @@ export const MODES = Object.freeze({
   toasty: { name: '热烈', share: 1, duty: .85 },
 });
 export function deviceCapabilities(navigatorLike = navigator) {
+  const touch = Number(navigatorLike.maxTouchPoints) > 0;
+  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  const mobile = navigatorLike.userAgentData?.mobile === true || /Android|iPhone|iPad|iPod|Mobile|HarmonyOS|OpenHarmony/i.test(navigatorLike.userAgent || '') || (touch && (coarse || /Macintosh/i.test(navigatorLike.userAgent || '')));
   const reported = Number(navigatorLike.hardwareConcurrency);
   const memory = Number(navigatorLike.deviceMemory);
-  const logical = Number.isFinite(reported) && reported >= 1 ? Math.min(64, Math.floor(reported)) : 4;
+  const logical = Number.isFinite(reported) && reported >= 1 ? Math.min(64, Math.floor(reported)) : mobile ? 2 : 4;
   const memoryGiB = Number.isFinite(memory) && memory > 0 ? memory : null;
   const threadLimit = memoryGiB && memoryGiB <= 1 ? 4 : memoryGiB && memoryGiB <= 2 ? 8 : 64;
-  return { logical, reportedCores: Number.isFinite(reported) && reported >= 1, memoryGiB, capacity: Math.min(logical, threadLimit) };
+  return { mobile, cpuAvailable: typeof globalThis.Worker === 'function' && typeof globalThis.MessageChannel === 'function', logical, reportedCores: Number.isFinite(reported) && reported >= 1, memoryGiB, capacity: Math.min(logical, threadLimit) };
 }
 export function cpuProfile(mode, device) {
   const profile = MODES[mode] || MODES.gentle;
   const maxCount = Math.max(1, Math.ceil(device.capacity * profile.share));
-  return { maxCount, targetDuty: profile.duty, initialCount: Math.max(1, maxCount - (mode === 'gentle' ? 0 : 1)), initialDuty: Math.min(.75, profile.duty) };
+  return { maxCount, targetDuty: profile.duty, initialCount: Math.max(1, (device.mobile ? Math.min(2, maxCount) : maxCount) - (mode === 'gentle' ? 0 : 1)), initialDuty: Math.min(.75, profile.duty) };
 }
 export function adaptCPU(current, profile, sample) {
   let { count, duty, healthy = 0, strained = 0 } = current;

@@ -134,7 +134,8 @@ try {
       checks.push('GPU 硬件计时扩展返回实际计算耗时，用于自适应校准');
     }
     await real.locator('#cpu').check();
-    await real.waitForFunction(() => window.__pool.filter(w => /load-worker/.test(w.url) && !w.terminated && w.sent.some(m => m.duty >= .849)).length === 8);
+    await real.waitForFunction(() => window.__pool.some(w => /load-worker/.test(w.url) && !w.terminated && w.sent.some(m => m.type === 'start' && m.mode === 'toasty' && m.duty > 0 && m.duty <= .85)));
+    // The governor may reduce the pool while GPU work is active; the standalone check above verifies the eight-thread ceiling.
     const start = Date.now(); await real.locator('#power').click();
     await real.waitForFunction(() => window.__pool.every(w => w.terminated));
     assert(Date.now() - start < 1000);
@@ -150,7 +151,7 @@ try {
     const gpuSelfStop = await real.evaluate(async path => {
       async function run(duration, heartbeat) {
         return new Promise((resolve, reject) => {
-          const worker = new Worker(path); let beat;
+          const worker = new Worker(path, { type: 'module' }); let beat;
           const timeout = setTimeout(() => { worker.terminate(); clearInterval(beat); reject(new Error('GPU self-stop timeout')); }, 7000);
           worker.onmessage = ({ data }) => {
             if (data.type === 'ready') { worker.postMessage({ type: 'start', mode: 'gentle', endAt: performance.timeOrigin + performance.now() + duration }); if (heartbeat) beat = setInterval(() => worker.postMessage({ type: 'heartbeat' }), 100); }
@@ -165,9 +166,10 @@ try {
   } else checks.push('当前后端没有硬件 GPU：正确提示不可用，硬件负载路径未验');
   const failed = await realContext.newPage(); await failed.route('**/load-worker*.js', route => route.abort());
   await failed.goto(base); await failed.locator('#power').click();
-  await failed.waitForFunction(() => /计算已停止|无法启动计算/.test(document.querySelector('#feedback-text').textContent));
-  assert.equal(await failed.locator('#heater').getAttribute('data-on'), 'false');
-  checks.push('CPU Worker 加载失败停止并反馈');
+  await failed.waitForFunction(() => document.querySelector('#cpu').disabled);
+  assert.equal(await failed.locator('#heater').getAttribute('data-on'), 'true');
+  await failed.locator('#power').click();
+  checks.push('CPU Worker 加载失败自动降级为炉火展示');
   const race = await realContext.newPage();
   await race.route('**/load-worker*.js', async route => { await new Promise(resolve => setTimeout(resolve, 200)); await route.continue().catch(() => {}); });
   await race.goto(base); await race.locator('#power').click(); await race.locator('#power').click(); await race.waitForTimeout(350);
@@ -186,7 +188,7 @@ const softwareBrowser = await chromium.launch({ headless: true, args: ['--use-an
 try {
   const c = await contextFor(softwareBrowser); const p = await c.newPage(); await p.goto(base);
   await p.locator('#gpu').check(); await p.locator('#power').click();
-  await p.waitForFunction(() => document.querySelector('#feedback-text').textContent === 'GPU 不可用');
+  await p.waitForFunction(() => document.querySelector('#gpu').disabled);
   assert(!(await p.locator('#gpu').isChecked())); assert.equal(await p.locator('#heater').getAttribute('data-on'), 'true');
   assert(await p.evaluate(() => window.__pool.some(w => /load-worker/.test(w.url) && !w.terminated)));
   await p.locator('#power').click(); console.log('SwiftShader：拒绝将软件渲染当成 GPU，CPU 仍可运行。');

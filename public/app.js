@@ -1,9 +1,12 @@
 import { LoadController, MODES, monotonicNow } from './load-controller.js';
+import { deviceCapabilities } from './adaptive-policy.js';
 import { GPUController } from './gpu-controller.js';
 const $ = id => document.getElementById(id);
 const cpu = new LoadController();
 const gpu = new GPUController();
-const state = { phase: 'idle', mode: 'gentle', minutes: 1, cpu: true, gpu: false, endAt: 0, remaining: 60, token: 0, gpuError: '', skin: 'nordic' };
+const available = { cpu: deviceCapabilities().cpuAvailable, gpu: true };
+const sourceRequests = { cpu: 0, gpu: 0 };
+const state = { phase: 'idle', mode: 'gentle', minutes: 1, cpu: available.cpu, gpu: false, endAt: 0, remaining: 60, token: 0, gpuError: '', cpuError: available.cpu ? '' : '浏览器未提供计算线程。', skin: 'nordic' };
 const running = () => state.phase === 'running';
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let ticker, toastTimer, lastSecond;
@@ -35,18 +38,22 @@ function render() {
   $('state-dot').title = state.phase === 'starting' ? '启动中' : running() ? '运行中' : '已停止';
   $('modes').style.setProperty('--selected', Object.keys(MODES).indexOf(state.mode));
   $('cpu').checked = state.cpu; $('gpu').checked = state.gpu;
-  $('cpu').closest('.source').classList.toggle('is-active', running() && state.cpu);
+  for (const source of ['cpu', 'gpu']) {
+    $(source).disabled = !available[source];
+    $(source).closest('.source').classList.toggle('is-unavailable', !available[source]);
+  }
+  $('cpu').closest('.source').classList.toggle('is-active', running() && state.cpu && !!cpu.configuration);
   $('gpu').closest('.source').classList.toggle('is-active', gpu.active);
   $('gpu').closest('.source').classList.toggle('has-error', !!state.gpuError);
   $('gpu').setAttribute('aria-label', state.gpuError ? `GPU：${state.gpuError}` : 'GPU');
-  $('cpu-detail').textContent = cpu.description(state.mode);
+  $('cpu-detail').textContent = state.cpuError || cpu.description(state.mode);
   if (!gpu.active) $('gpu-detail').textContent = state.gpuError || (state.gpu ? '待启动' : '未开启');
   document.querySelectorAll('button[data-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === state.mode)));
   document.querySelectorAll('button[data-minutes]').forEach(button => button.setAttribute('aria-pressed', String(Number(button.dataset.minutes) === state.minutes)));
   document.querySelectorAll('button[data-skin]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.skin === state.skin)));
 }
 function stop(message = '', completed = false) {
-  state.token++; state.phase = 'idle';
+  state.token++; sourceRequests.cpu++; sourceRequests.gpu++; state.phase = 'idle';
   cpu.stop(); gpu.stop(); clearInterval(ticker); ticker = null;
   state.remaining = completed ? 0 : state.minutes * 60;
   render(); feedback(message);
@@ -59,37 +66,51 @@ function tick() {
   const second = Math.ceil(state.remaining);
   if (second !== lastSecond) { lastSecond = second; render(); }
 }
+function disableSource(source, reason) {
+  state[source] = false; available[source] = false;
+  state[`${source}Error`] = reason || `${source.toUpperCase()} 不可用`;
+  if (source === 'cpu') cpu.stop(); else gpu.stop();
+}
+async function fallbackCPU(token) {
+  if (!available.cpu || state.cpu || document.hidden || monotonicNow() >= state.endAt) return;
+  const request = ++sourceRequests.cpu; state.cpu = true; render();
+  const ok = await cpu.start(state.mode, state.endAt);
+  if (token !== state.token || request !== sourceRequests.cpu) return;
+  if (!ok) disableSource('cpu', '浏览器无法运行计算线程。');
+  render();
+}
 async function start() {
   if (document.hidden) return;
-  state.phase = 'starting'; state.remaining = state.minutes * 60; state.endAt = monotonicNow() + state.remaining * 1000; state.gpuError = '';
+  state.phase = 'starting'; state.remaining = state.minutes * 60; state.endAt = monotonicNow() + state.remaining * 1000;
   const token = ++state.token; render(); feedback('');
-  try {
-    const [cpuStarted, gpuResult] = await Promise.all([
-      state.cpu ? cpu.start(state.mode, state.endAt) : true,
-      state.gpu ? gpu.start(state.mode, state.endAt) : { ok: false, skipped: true },
-    ]);
-    if (state.token !== token) return;
-    if (!cpuStarted || document.hidden) { stop(); return; }
-    if (state.gpu && !gpuResult.ok) {
-      state.gpu = false; state.gpuError = gpuResult.reason || 'GPU 不可用'; feedback('GPU 不可用');
-    }
-    state.phase = 'running'; lastSecond = null; tick(); ticker = setInterval(tick, 100); render();
-  } catch { if (state.token === token) stop('无法启动计算'); }
+  const [cpuStarted, gpuResult] = await Promise.all([
+    state.cpu ? cpu.start(state.mode, state.endAt) : true,
+    state.gpu ? gpu.start(state.mode, state.endAt) : { ok: false, skipped: true },
+  ]);
+  if (state.token !== token) return;
+  if (document.hidden || monotonicNow() >= state.endAt) { stop(); return; }
+  if (!cpuStarted) disableSource('cpu', '浏览器无法运行计算线程。');
+  if (state.gpu && !gpuResult.ok) {
+    disableSource('gpu', gpuResult.reason);
+    await fallbackCPU(token);
+  }
+  if (state.token !== token) return;
+  state.phase = 'running'; lastSecond = null; tick(); ticker = setInterval(tick, 100); render();
 }
-cpu.onConfig = () => { $('cpu-detail').textContent = cpu.description(state.mode); };
+cpu.onConfig = () => { $('cpu-detail').textContent = state.cpuError || cpu.description(state.mode); };
 cpu.onFailure = () => {
   if (state.phase === 'idle') return;
-  const completed = state.endAt <= monotonicNow();
-  stop(completed ? '时间到' : '计算已停止', completed);
+  if (document.hidden || state.endAt <= monotonicNow()) { stop('', state.endAt <= monotonicNow()); return; }
+  disableSource('cpu', '计算线程已中断。'); render();
 };
 gpu.onStatus = (status, reason) => {
   if (status === 'unavailable' && state.phase === 'running') {
-    state.gpu = false; state.gpuError = reason; render();
-    if (running() && state.endAt > monotonicNow()) feedback('GPU 已停止');
+    if (document.hidden || state.endAt <= monotonicNow()) { stop('', state.endAt <= monotonicNow()); return; }
+    disableSource('gpu', reason); render(); fallbackCPU(state.token);
   }
 };
 gpu.onStats = stats => {
-  $('gpu-detail').textContent = `${stats.renderer || 'WebGL2'} · 自动 ${stats.side}×${stats.side} / ${stats.steps} 次迭代 · ${stats.gpuMs ? `GPU 计时 ${stats.gpuMs}ms` : `完成等待 ${stats.batchMs}ms`} / 批。不是整机 GPU 使用率。`;
+  $('gpu-detail').textContent = `${stats.renderer || 'WebGL2'} · ${stats.backend === 'page-webgl2' ? '兼容模式' : '后台线程'} · 自动 ${stats.side}×${stats.side} / ${stats.steps} 次迭代 · ${stats.gpuMs ? `GPU 计时 ${stats.gpuMs}ms` : `完成等待 ${stats.batchMs}ms`} / 批。不是整机 GPU 使用率。`;
 };
 $('power').addEventListener('click', () => state.phase === 'idle' ? start() : stop());
 $('modes').addEventListener('click', event => {
@@ -112,20 +133,20 @@ $('durations').addEventListener('click', event => {
   render();
 });
 for (const source of ['cpu', 'gpu']) $(source).addEventListener('change', async event => {
+  const checked = event.target.checked;
   if (state.phase === 'starting') stop();
-  state[source] = event.target.checked; state.gpuError = ''; render();
+  state[source] = checked; render();
   if (!running()) return;
-  const token = state.token;
+  const token = state.token, request = ++sourceRequests[source];
+  if (!checked) { if (source === 'cpu') cpu.stop(); else gpu.stop(); render(); return; }
   if (source === 'cpu') {
-    if (!state.cpu) cpu.stop();
-    else { try { await cpu.start(state.mode, state.endAt); } catch { if (state.token === token) stop('无法启动 CPU'); } }
+    const ok = await cpu.start(state.mode, state.endAt);
+    if (state.token !== token || request !== sourceRequests[source]) return;
+    if (!ok) disableSource('cpu', '浏览器无法运行计算线程。');
   } else {
-    if (!state.gpu) gpu.stop();
-    else {
-      const result = await gpu.start(state.mode, state.endAt);
-      if (state.token !== token || !state.gpu || result.cancelled) return;
-      if (!result.ok) { state.gpu = false; state.gpuError = result.reason || 'GPU 不可用'; feedback('GPU 不可用'); }
-    }
+    const result = await gpu.start(state.mode, state.endAt);
+    if (state.token !== token || request !== sourceRequests[source] || result.cancelled) return;
+    if (!result.ok) { disableSource('gpu', result.reason); await fallbackCPU(token); }
   }
   if (state.token === token) render();
 });

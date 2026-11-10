@@ -11,6 +11,16 @@ export class LoadController {
     if (generation !== this.generation) return;
     this.stop(); this.onFailure('计算已停止');
   }
+  loseWorker(worker, generation) {
+    if (generation !== this.generation || !this.records.has(worker)) return;
+    const record = this.records.get(worker);
+    this.records.delete(worker); this.workers = this.workers.filter(item => item !== worker);
+    record.cancel?.(); record.benchmark?.(null); worker.terminate();
+    if (this.workers.length) {
+      this.device.capacity = Math.min(this.device.capacity, this.workers.length);
+      this.profile.maxCount = this.workers.length; this.adaptive.count = this.workers.length; this.onConfig();
+    } else if (this.heartbeat) this.fail(generation);
+  }
   addWorker(startOnReady = true) {
     const generation = this.generation;
     const worker = new Worker(new URL('./load-worker.js', import.meta.url));
@@ -19,16 +29,16 @@ export class LoadController {
     this.records.set(worker, record);
     return new Promise(resolve => {
       const finish = result => { clearTimeout(timeout); record.cancel = null; resolve(result); };
-      const timeout = setTimeout(() => { finish(false); this.fail(generation); }, 3000);
+      const timeout = setTimeout(() => this.loseWorker(worker, generation), 3000);
       record.cancel = () => finish(false);
       worker.addEventListener('message', ({ data }) => {
         if (generation !== this.generation || !this.records.has(worker)) return;
         if (data.type === 'ready') { record.ready = true; if (record.startOnReady) this.send(worker, 'start'); finish(true); }
         if (data.type === 'benchmark') record.benchmark?.(data);
         if (data.type === 'stats') { record.stats = data; record.statsAt = monotonicNow(); }
-        if (data.type === 'stopped') this.fail(generation);
+        if (data.type === 'stopped') this.loseWorker(worker, generation);
       });
-      worker.addEventListener('error', () => { finish(false); this.fail(generation); });
+      worker.addEventListener('error', event => { event.preventDefault(); this.loseWorker(worker, generation); });
     });
   }
   send(worker, type = 'update') {
@@ -41,7 +51,7 @@ export class LoadController {
       this.records.delete(worker); record?.cancel?.(); record?.benchmark?.(null); worker.terminate();
     }
     const ready = [];
-    try { while (this.workers.length < count) ready.push(this.addWorker(true)); } catch { this.fail(this.generation); }
+    try { while (this.workers.length < count) ready.push(this.addWorker(true)); } catch { this.device.capacity = Math.max(1, this.workers.length); this.profile.maxCount = this.device.capacity; this.adaptive.count = this.device.capacity; }
     return ready;
   }
   async start(mode, endAt) {
@@ -50,9 +60,10 @@ export class LoadController {
     this.adaptive = { count: this.profile.initialCount, duty: this.profile.initialDuty, healthy: 0, strained: 0 };
     this.configuration = { mode, endAt, duty: this.adaptive.duty };
     try {
-      if (!('Worker' in window)) throw new Error('UNAVAILABLE');
+      if (!this.device.cpuAvailable) throw new Error('UNAVAILABLE');
       const ready = await this.addWorker(false);
-      if (!ready || generation !== this.generation) return false;
+      if (generation !== this.generation) return false;
+      if (!ready) { this.stop(); return false; }
       if (!this.calibration) {
         const worker = this.workers[0], record = this.records.get(worker);
         const result = await new Promise(resolve => {
@@ -77,7 +88,7 @@ export class LoadController {
       this.governor = setInterval(() => this.tune(), 750);
       this.onConfig(); return true;
     } catch {
-      if (generation === this.generation) this.fail(generation);
+      if (generation === this.generation) this.stop();
       return false;
     }
   }

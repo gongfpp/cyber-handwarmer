@@ -1,76 +1,96 @@
 import { deviceCapabilities } from './adaptive-policy.js';
 import { monotonicNow } from './load-controller.js';
+import { createGPUEngine } from './gpu-engine.js';
 const reasons = {
-  'software-renderer': '浏览器使用软件渲染，无法调用硬件 GPU。',
-  'unsupported': '当前浏览器未提供可用的 WebGL2 GPU。',
+  'software-renderer': '浏览器使用软件渲染。',
+  unsupported: '浏览器未提供可用的 WebGL2。',
   'context-lost': 'GPU 连接已中断。',
-  'gpu-timeout': 'GPU 响应超时，已停止 GPU 负载。',
+  'gpu-timeout': 'GPU 响应超时。',
 };
 export class GPUController {
-  worker = null;
-  active = false;
-  generation = 0;
-  heartbeat = null;
-  endAt = 0;
-  device = null; lastBeat = 0;
-  pendingCancel = null;
-  onStatus = () => {};
-  onStats = () => {};
+  worker = null; engine = null; active = false; generation = 0; heartbeat = null;
+  endAt = 0; device = null; lastBeat = 0; pendingCancel = null;
+  onStatus = () => {}; onStats = () => {};
   async start(mode, endAt) {
-    this.stop();
-    this.endAt = endAt;
-    const generation = this.generation;
-    if (!('Worker' in window)) return { ok: false, reason: reasons.unsupported };
-    try {
-      const worker = new Worker(new URL('./gpu-worker.js', import.meta.url)); this.worker = worker;
-      return await new Promise(resolve => {
-        let settled = false;
-        const finish = result => {
-          if (settled) return; settled = true; clearTimeout(timeout); this.pendingCancel = null; resolve(result);
-        };
-        const timeout = setTimeout(() => { finish({ ok: false, reason: 'GPU 未能及时启动。' }); if (generation === this.generation) this.stop(); }, 4500);
-        this.pendingCancel = () => finish({ ok: false, cancelled: true });
-        worker.onmessage = ({ data }) => {
-          if (generation !== this.generation) return;
-          if (data.type === 'ready') worker.postMessage({ type: 'start', mode, endAt, memoryGiB: deviceCapabilities().memoryGiB });
-          if (data.type === 'running') {
+    this.stop(); this.endAt = endAt;
+    const generation = this.generation, hints = deviceCapabilities();
+    const configuration = { type: 'start', mode, endAt, memoryGiB: hints.memoryGiB, mobile: hints.mobile };
+    if (typeof Worker === 'function' && typeof OffscreenCanvas === 'function') {
+      const result = await this.launch(configuration, generation, true);
+      if (result.ok || result.cancelled || generation !== this.generation) return result;
+      this.disposeBackend();
+      // Software rendering is not improved by moving the same work onto the page.
+      if (result.code === 'software-renderer') return result;
+    }
+    if (generation !== this.generation || document.hidden || monotonicNow() >= endAt) return { ok: false, cancelled: true };
+    return this.launch(configuration, generation, false);
+  }
+  launch(configuration, generation, useWorker) {
+    return new Promise(resolve => {
+      let settled = false;
+      const finish = result => {
+        if (settled) return;
+        settled = true; clearTimeout(timeout); this.pendingCancel = null; resolve(result);
+      };
+      const unavailable = code => {
+        const reason = reasons[code] || 'GPU 不可用。';
+        if (!settled) finish({ ok: false, reason, code });
+        else { this.stop(); this.onStatus('unavailable', reason); }
+      };
+      const timeout = setTimeout(() => {
+        finish({ ok: false, reason: 'GPU 启动超时。', code: 'startup-timeout' }); this.disposeBackend();
+      }, 3000);
+      this.pendingCancel = () => finish({ ok: false, cancelled: true });
+      const receive = data => {
+        if (generation !== this.generation) return;
+        if (data.type === 'ready') this.worker?.postMessage(configuration);
+        if (data.type === 'running') {
+          if (document.hidden || monotonicNow() >= this.endAt) { this.stop(); return; }
+          this.active = true; this.device = data.device; this.lastBeat = monotonicNow();
+          this.heartbeat = setInterval(() => {
             if (document.hidden || monotonicNow() >= this.endAt) { this.stop(); return; }
-            this.active = true; this.device = data.device || null; this.lastBeat = monotonicNow();
-            this.heartbeat = setInterval(() => {
-              if (document.hidden || monotonicNow() >= this.endAt) { this.stop(); return; }
-              const time = monotonicNow(), mainLagMs = Math.max(0, time - this.lastBeat - 250); this.lastBeat = time;
-              worker.postMessage({ type: 'heartbeat', mainLagMs });
-            }, 250);
-            finish({ ok: true }); this.onStatus('running');
-          }
-          if (data.type === 'stats') this.onStats(data);
-          if (data.type === 'unavailable' || data.type === 'stopped') {
-            const reason = reasons[data.reason] || 'GPU 负载已停止。';
-            finish({ ok: false, reason }); this.stop(); this.onStatus('unavailable', reason);
-          }
-        };
-        worker.onerror = () => {
-          if (generation !== this.generation) return;
-          const reason = 'GPU 线程无法运行，CPU 暖手仍可使用。';
-          finish({ ok: false, reason }); this.stop(); this.onStatus('unavailable', reason);
-        };
-      });
-    } catch { this.stop(); return { ok: false, reason: reasons.unsupported }; }
+            const time = monotonicNow(), mainLagMs = Math.max(0, time - this.lastBeat - 250); this.lastBeat = time;
+            this.send({ type: 'heartbeat', mainLagMs });
+          }, 250);
+          finish({ ok: true }); this.onStatus('running');
+        }
+        if (data.type === 'stats') this.onStats(data);
+        if (data.type === 'unavailable' || data.type === 'stopped') unavailable(data.reason);
+      };
+      try {
+        if (useWorker) {
+          const worker = new Worker(new URL('./gpu-worker.js', import.meta.url), { type: 'module' });
+          this.worker = worker; worker.onmessage = event => receive(event.data);
+          worker.onerror = event => { event.preventDefault(); unavailable('unsupported'); };
+        } else {
+          this.engine = createGPUEngine({
+            createCanvas: () => {
+              const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
+              canvas.className = 'gpu-surface'; canvas.setAttribute('aria-hidden', 'true');
+              document.body.append(canvas); return canvas;
+            },
+            // Deliver after assignment so cancellation always has an engine to release.
+            emit: data => queueMicrotask(() => receive(data)), mobile: !!configuration.mobile, mainThread: true,
+          });
+          this.engine.receive(configuration);
+        }
+      } catch { unavailable('unsupported'); }
+    }).then(result => { if (!result.ok && generation === this.generation) this.disposeBackend(); return result; });
   }
-  update(mode, endAt) {
-    this.endAt = endAt;
-    this.worker?.postMessage({ type: 'update', mode, endAt });
-  }
-  stop() {
-    this.generation++; this.active = false;
-    clearInterval(this.heartbeat); this.heartbeat = null;
-    this.pendingCancel?.(); this.pendingCancel = null;
+  send(data) { this.worker?.postMessage(data); this.engine?.receive(data); }
+  update(mode, endAt) { this.endAt = endAt; this.send({ type: 'update', mode, endAt }); }
+  disposeBackend() {
+    clearInterval(this.heartbeat); this.heartbeat = null; this.active = false;
+    const engine = this.engine; this.engine = null; engine?.stop();
     const worker = this.worker; this.worker = null;
     if (worker) {
-      // Let the Worker explicitly release its GL context; terminate even if it cannot respond.
       const timeout = setTimeout(() => worker.terminate(), 80);
+      worker.onerror = null;
       worker.onmessage = ({ data }) => { if (data.type === 'stopped' || data.type === 'unavailable') { clearTimeout(timeout); worker.terminate(); } };
       worker.postMessage({ type: 'stop' });
     }
+  }
+  stop() {
+    this.generation++; this.pendingCancel?.(); this.pendingCancel = null; this.disposeBackend();
   }
 }
