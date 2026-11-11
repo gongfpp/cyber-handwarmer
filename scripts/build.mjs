@@ -27,6 +27,7 @@ await asset('shutdown-atmosphere.js');
 await asset('shutdown.js', ['shutdown-atmosphere.js']);
 await asset('community.js');
 await asset('site-visitor-count.js');
+await asset('site-events.js');
 await asset('app.js', ['load-controller.js', 'gpu-controller.js', 'adaptive-policy.js', 'fire-sound.js', 'shutdown.js', 'community.js']);
 await asset('style.css');
 await asset('icon.svg');
